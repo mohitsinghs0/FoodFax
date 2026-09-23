@@ -1,0 +1,6 @@
+{
+  "name": "FoodFax",
+  "description": "Digital ordering, live queue tokens, and kitchen management for street food stalls, tapris, and canteens.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
