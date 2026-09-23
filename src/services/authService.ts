@@ -1031,16 +1031,19 @@ class AuthService {
       id: uid,
     };
 
-    try {
-      await supabase.from('users').update({
+    if (!this.currentUser?.isDemo) {
+      const { error } = await supabase.from('users').update({
         full_name: updates.fullName,
         phone: updates.phone,
         email: updates.email,
         photo_url: updates.photoUrl,
         updated_at: new Date().toISOString(),
       }).eq('id', uid);
-    } catch (err) {
-      console.warn('[AuthService] Error updating user in Supabase:', err);
+
+      if (error) {
+        console.error('[AuthService] Error updating user in Supabase:', error);
+        throw new Error(error.message || 'Profile update failed.');
+      }
     }
 
     this.persistSession(updatedUser, this.currentBusiness);

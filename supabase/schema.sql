@@ -293,8 +293,12 @@ ALTER TABLE public.shop_token_counters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_action_logs ENABLE ROW LEVEL SECURITY;
 
--- Permissive policies for the development phase (Supports anon & authenticated)
--- Can be restricted later for strict multi-tenant roles
+-- Permissive policies for the development / demo phase.
+-- ⚠️  TODO (Production): Replace these with role-scoped policies before going live:
+--   - customers  → can only read/write their own orders and profile rows
+--   - owners     → can only read/write rows belonging to their shop_id
+--   - admin      → full access via service-role key (never anon)
+-- Never expose the service-role key in client-side code or .env committed to git.
 CREATE POLICY "Public full access on users" ON public.users FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on shops" ON public.shops FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on categories" ON public.categories FOR ALL USING (true) WITH CHECK (true);
@@ -307,6 +311,7 @@ CREATE POLICY "Public full access on favorite_shops" ON public.favorite_shops FO
 CREATE POLICY "Public full access on shop_token_counters" ON public.shop_token_counters FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on ai_action_logs" ON public.ai_action_logs FOR ALL USING (true) WITH CHECK (true);
+
 
 -- ============================================================================
 -- STORAGE BUCKET: avatars

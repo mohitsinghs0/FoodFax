@@ -1,3 +1,16 @@
+/**
+ * supabaseSyncService (legacy name: firestoreSyncService)
+ *
+ * This is the core data-access layer for FoodFax. Despite the filename,
+ * this service uses **Supabase (PostgreSQL + Realtime)** — NOT Firebase Firestore.
+ * The "firestore" name is a historical artifact from an earlier migration.
+ *
+ * Responsibilities:
+ *  - Database CRUD via supabase-js client
+ *  - Supabase Realtime WebSocket subscriptions (postgres_changes)
+ *  - Mock data fallback when offline / during demo mode
+ *  - Order commit event broadcasting
+ */
 import { supabase } from '../supabase';
 import { 
   Order, 
@@ -16,6 +29,7 @@ import {
 } from '../types';
 import { MOCK_SHOPS, MOCK_MENU_ITEMS, MOCK_CATEGORIES, INITIAL_ORDERS } from '../data/mockData';
 import { assertValidOrderSubmission } from '../utils/orderValidation';
+
 
 type SyncListener = (isSyncing: boolean) => void;
 
@@ -860,10 +874,10 @@ class SupabaseSyncService {
     shopId: string,
     onUpdate: (orders: Order[]) => void
   ): () => void {
-    const channelName = `shop-orders-realtime-${shopId}-${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
+    const channelName = `shop-orders-realtime-${shopId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const channel = supabase.channel(channelName);
+    try {
+      channel.on(
         'postgres_changes',
         {
           event: '*',
@@ -875,8 +889,15 @@ class SupabaseSyncService {
           const fresh = await this.getOrdersByShop(shopId);
           onUpdate(fresh);
         }
-      )
-      .subscribe();
+      );
+      channel.subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[Supabase] Realtime shop orders unavailable for ${shopId}: ${status}`);
+        }
+      });
+    } catch (err) {
+      console.warn('[Supabase] Could not subscribe to shop orders realtime:', err);
+    }
 
     return () => {
       supabase.removeChannel(channel);
@@ -887,10 +908,10 @@ class SupabaseSyncService {
     orderId: string,
     onUpdate: (order: Order) => void
   ): () => void {
-    const channelName = `single-order-${orderId}-${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
+    const channelName = `single-order-${orderId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const channel = supabase.channel(channelName);
+    try {
+      channel.on(
         'postgres_changes',
         {
           event: '*',
@@ -902,8 +923,15 @@ class SupabaseSyncService {
           const fresh = await this.getOrder(orderId);
           if (fresh) onUpdate(fresh);
         }
-      )
-      .subscribe();
+      );
+      channel.subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[Supabase] Realtime order unavailable for ${orderId}: ${status}`);
+        }
+      });
+    } catch (err) {
+      console.warn('[Supabase] Could not subscribe to order realtime:', err);
+    }
 
     return () => {
       supabase.removeChannel(channel);
@@ -972,10 +1000,10 @@ class SupabaseSyncService {
     shopId: string,
     onUpdate: (notifs: BusinessNotification[]) => void
   ): () => void {
-    const channelName = `shop-notifs-${shopId}-${Date.now()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
+    const channelName = `shop-notifs-${shopId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const channel = supabase.channel(channelName);
+    try {
+      channel.on(
         'postgres_changes',
         {
           event: '*',
@@ -987,8 +1015,15 @@ class SupabaseSyncService {
           const fresh = await this.getNotificationsByShop(shopId);
           onUpdate(fresh);
         }
-      )
-      .subscribe();
+      );
+      channel.subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[Supabase] Realtime notifications unavailable for ${shopId}: ${status}`);
+        }
+      });
+    } catch (err) {
+      console.warn('[Supabase] Could not subscribe to notifications realtime:', err);
+    }
 
     return () => {
       supabase.removeChannel(channel);

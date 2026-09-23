@@ -1,6 +1,6 @@
 import { Order, OrderStatus } from '../types';
 import { INITIAL_ORDERS } from '../data/mockData';
-import { firestoreSync, onDatabaseOrderCommitted } from './firestoreSyncService';
+import { firestoreSync, normalizeOrderDoc, onDatabaseOrderCommitted } from './firestoreSyncService';
 import { notificationService } from './notificationService';
 import { assertValidOrderSubmission } from '../utils/orderValidation';
 
@@ -115,7 +115,7 @@ export const orderService = {
       }
     });
 
-    const combined = Array.from(orderMap.values());
+    const combined = Array.from(orderMap.values()).map((order) => normalizeOrderDoc(order));
     combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return combined;
   },
@@ -165,7 +165,7 @@ export const orderService = {
       }
     });
 
-    const combined = Array.from(orderMap.values());
+    const combined = Array.from(orderMap.values()).map((order) => normalizeOrderDoc(order));
     combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return combined;
   },

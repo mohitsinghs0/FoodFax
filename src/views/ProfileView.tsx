@@ -20,7 +20,10 @@ import {
   Camera,
   CheckCircle2,
   Trash2,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Save,
+  X
 } from 'lucide-react';
 import { CameraAvatarModal } from '../components/profile/CameraAvatarModal';
 
@@ -30,11 +33,58 @@ interface ProfileViewProps {
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => {
   const { navigate } = useRouter();
-  const { currentUser, role, logout, removeAvatar } = useAuth();
+  const { currentUser, role, logout, removeAvatar, updateProfile } = useAuth();
   const { openA11yModal } = useAccessibility();
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    fullName: currentUser?.fullName || currentUser?.name || '',
+    phone: currentUser?.phone || '',
+    email: currentUser?.email || '',
+  });
+
+  const startEditing = () => {
+    setEditForm({
+      fullName: currentUser?.fullName || currentUser?.name || '',
+      phone: currentUser?.phone || '',
+      email: currentUser?.email || '',
+    });
+    setEditError(null);
+    setIsEditing(true);
+  };
+
+  const handleProfileSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editForm.fullName.trim()) {
+      setEditError('Full name is required.');
+      return;
+    }
+    if (editForm.phone.replace(/\D/g, '').length < 10) {
+      setEditError('Enter a valid 10-digit phone number.');
+      return;
+    }
+
+    setIsSaving(true);
+    setEditError(null);
+    try {
+      await updateProfile({
+        fullName: editForm.fullName.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim() || undefined,
+      });
+      setIsEditing(false);
+      setSuccessToast('Profile details updated successfully.');
+      setTimeout(() => setSuccessToast(null), 3000);
+    } catch (err: any) {
+      setEditError(err?.message || 'Could not update profile details.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -123,7 +173,73 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
               </p>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={startEditing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            <span>Edit</span>
+          </button>
         </div>
+
+        {isEditing && (
+          <form onSubmit={handleProfileSave} className="mt-5 pt-5 border-t border-slate-100 space-y-3">
+            {editError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">
+                {editError}
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-bold text-slate-700">
+                Full name
+                <input
+                  value={editForm.fullName}
+                  onChange={(event) => setEditForm((form) => ({ ...form, fullName: event.target.value }))}
+                  className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                Phone number
+                <input
+                  value={editForm.phone}
+                  onChange={(event) => setEditForm((form) => ({ ...form, phone: event.target.value }))}
+                  className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  required
+                />
+              </label>
+            </div>
+            <label className="block text-xs font-bold text-slate-700">
+              Email address
+              <input
+                type="email"
+                value={editForm.email}
+                onChange={(event) => setEditForm((form) => ({ ...form, email: event.target.value }))}
+                className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:bg-slate-300 text-white text-xs font-bold"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {isSaving ? 'Saving...' : 'Save changes'}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Camera Quick Action Bar */}
         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">

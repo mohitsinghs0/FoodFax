@@ -6,20 +6,22 @@ type OrderEventCallback = (order: Order) => void;
 type OrdersListCallback = (orders: Order[]) => void;
 
 /**
- * Real-time event bus backed by Cloud Firestore onSnapshot listeners
- * with seamless local storage cross-tab events fallback.
+ * Real-time event bus backed by Supabase Realtime (PostgreSQL postgres_changes)
+ * with localStorage cross-tab events as a local fallback.
+ *
+ * NOTE: `firestoreSyncService` is a legacy name — the service uses Supabase, not Firebase Firestore.
  */
 class OrderRealtimeService {
   private isConnected: boolean = true;
   private connectionListeners = new Set<(status: boolean) => void>();
 
   public subscribeToShop(shopId: string, onOrdersUpdate: OrdersListCallback): () => void {
-    // 1. Connect to local pub/sub
+    // 1. Subscribe to in-memory local pub/sub (immediate, no network)
     const unsubscribeOrderService = orderService.subscribeToShopOrders(shopId, onOrdersUpdate);
 
-    // 2. Connect to Cloud Firestore Realtime collection listener
-    const unsubscribeFirestore = firestoreSync.subscribeToShopOrders(shopId, (cloudOrders) => {
-      // Merge with stored orders
+    // 2. Subscribe to Supabase Realtime postgres_changes for the orders table
+    const unsubscribeSupabase = firestoreSync.subscribeToShopOrders(shopId, (cloudOrders) => {
+      // Merge remote updates with local cache
       const current = orderService.getStoredOrders();
       const map = new Map<string, Order>();
       current.forEach((o) => map.set(o.id, o));
@@ -32,7 +34,7 @@ class OrderRealtimeService {
       });
     });
 
-    // 3. Cross-tab synchronization via window storage events
+    // 3. Cross-tab synchronisation via window storage events
     const storageHandler = (e: StorageEvent) => {
       if (e.key === 'foodflow_customer_orders') {
         orderService.getShopOrders(shopId).then((orders) => {
@@ -45,7 +47,7 @@ class OrderRealtimeService {
 
     return () => {
       unsubscribeOrderService();
-      unsubscribeFirestore();
+      unsubscribeSupabase();
       window.removeEventListener('storage', storageHandler);
     };
   }
@@ -56,8 +58,8 @@ class OrderRealtimeService {
 
   public subscribeToOrder(orderId: string, onOrderUpdate: OrderEventCallback): () => void {
     const unsubLocal = orderService.subscribeToOrder(orderId, onOrderUpdate);
-    const unsubFirestore = firestoreSync.subscribeToSingleOrder(orderId, (order) => {
-      // Update local storage
+    const unsubSupabase = firestoreSync.subscribeToSingleOrder(orderId, (order) => {
+      // Sync the remote update into localStorage cache
       const current = orderService.getStoredOrders();
       const idx = current.findIndex((o) => o.id === order.id);
       if (idx !== -1) {
@@ -71,7 +73,7 @@ class OrderRealtimeService {
 
     return () => {
       unsubLocal();
-      unsubFirestore();
+      unsubSupabase();
     };
   }
 
@@ -112,3 +114,4 @@ class OrderRealtimeService {
 }
 
 export const orderRealtimeService = new OrderRealtimeService();
+

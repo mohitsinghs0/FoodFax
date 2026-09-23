@@ -33,6 +33,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('Item currently out of stock');
+  const orderItems = Array.isArray(order.items) ? order.items : [];
 
   const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
@@ -193,7 +194,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
 
         {/* Ordered Items List */}
         <div className="py-3 space-y-2">
-          {order.items.map((item, idx) => (
+          {orderItems.map((item, idx) => (
             <div key={idx} className="flex items-center justify-between text-xs sm:text-sm">
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`w-3.5 h-3.5 rounded-xs border flex items-center justify-center shrink-0 ${
@@ -227,7 +228,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
       <div className="pt-3 border-t border-slate-100 mt-2 space-y-2.5">
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-500 font-medium">
-            Total {order.items.reduce((s, i) => s + i.quantity, 0)} items
+            Total {orderItems.reduce((s, i) => s + i.quantity, 0)} items
           </span>
           <div className="flex items-center gap-2">
             <span className="text-base font-extrabold text-slate-900">₹{order.total}</span>

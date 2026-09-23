@@ -48,9 +48,9 @@ export const BusinessOrdersView: React.FC = () => {
     const matchesType = orderTypeFilter === 'ALL' || o.orderType === orderTypeFilter;
     const matchesSearch =
       !searchToken ||
-      o.tokenNumber.toLowerCase().includes(searchToken.toLowerCase()) ||
-      o.customerName.toLowerCase().includes(searchToken.toLowerCase()) ||
-      (o.tableNumber && o.tableNumber.toLowerCase().includes(searchToken.toLowerCase()));
+      String(o.tokenNumber || '').toLowerCase().includes(searchToken.toLowerCase()) ||
+      String(o.customerName || '').toLowerCase().includes(searchToken.toLowerCase()) ||
+      String(o.tableNumber || '').toLowerCase().includes(searchToken.toLowerCase());
 
     return matchesTab && matchesType && matchesSearch;
   });

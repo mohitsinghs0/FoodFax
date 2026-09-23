@@ -1,13 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Read from Vite environment variables with robust fallback to provided configuration
-const supabaseUrl = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || 
-  'https://aftmqdmiwvpbpsdmsfbu.supabase.co';
+// Credentials must be supplied via .env (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY).
+// Never hardcode credentials in source files — rotate your keys if they were ever committed.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-const supabaseAnonKey = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || 
-  'sb_publishable_O-f6YGUbj6hqHYBlwEhE5g_QVrnke9m';
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error(
+    '[Supabase] ⚠️  Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in your .env file.\n' +
+    'Copy .env.example to .env and fill in your Supabase project credentials.'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -41,7 +44,7 @@ export async function testSupabaseConnection(): Promise<boolean> {
   }
 }
 
-// Automatically test connection in non-production or initialization
+// Automatically test connection on app initialisation
 if (typeof window !== 'undefined') {
   testSupabaseConnection().catch(() => {});
 }

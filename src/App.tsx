@@ -55,7 +55,7 @@ const AppContent: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   React.useEffect(() => {
-    // Subscribe to Firestore active network sync / fetch states
+    // Subscribe to Supabase sync state (loading / active network fetches)
     const unsub = firestoreSync.subscribeSyncState((syncing) => {
       setIsSyncing(syncing);
     });
