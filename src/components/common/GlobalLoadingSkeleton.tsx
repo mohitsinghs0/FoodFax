@@ -23,7 +23,7 @@ export const GlobalLoadingSkeleton: React.FC<GlobalLoadingSkeletonProps> = ({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
           </span>
-          <span>Syncing with Cloud Firestore...</span>
+          <span>Syncing with live data...</span>
         </div>
       </div>
 

@@ -210,7 +210,7 @@ export const CameraAvatarModal: React.FC<CameraAvatarModalProps> = ({
     startCamera(facingMode);
   };
 
-  // Save photo to Firestore user profile document
+  // Save photo to the active user profile document
   const handleSaveAvatar = async () => {
     if (!capturedPhoto) return;
 

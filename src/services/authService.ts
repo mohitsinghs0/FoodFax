@@ -1025,18 +1025,31 @@ class AuthService {
       throw new Error('User is not authenticated.');
     }
 
+    const fullName = (updates.fullName ?? this.currentUser?.fullName ?? this.currentUser?.name ?? 'User').trim();
+    const phone = (updates.phone ?? this.currentUser?.phone ?? '').trim();
+    const email = (updates.email ?? this.currentUser?.email ?? '').trim();
+    const photoUrl = updates.photoUrl ?? this.currentUser?.photoUrl;
+
+    const avatarUrl = updates.avatarUrl ?? this.currentUser?.avatarUrl ?? photoUrl ?? undefined;
+
     const updatedUser: AuthUser = {
       ...this.currentUser!,
       ...updates,
       id: uid,
+      fullName,
+      name: fullName,
+      phone,
+      email: email || undefined,
+      photoUrl: photoUrl || undefined,
+      avatarUrl,
     };
 
     if (!this.currentUser?.isDemo) {
       const { error } = await supabase.from('users').update({
-        full_name: updates.fullName,
-        phone: updates.phone,
-        email: updates.email,
-        photo_url: updates.photoUrl,
+        full_name: fullName,
+        phone,
+        email: email || null,
+        photo_url: photoUrl || null,
         updated_at: new Date().toISOString(),
       }).eq('id', uid);
 

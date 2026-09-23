@@ -40,6 +40,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
   const [isRemoving, setIsRemoving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showCongrats, setShowCongrats] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     fullName: currentUser?.fullName || currentUser?.name || '',
@@ -77,8 +78,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
         email: editForm.email.trim() || undefined,
       });
       setIsEditing(false);
+      setShowCongrats(true);
       setSuccessToast('Profile details updated successfully.');
-      setTimeout(() => setSuccessToast(null), 3000);
+      window.setTimeout(() => {
+        setSuccessToast(null);
+        setShowCongrats(false);
+      }, 2600);
     } catch (err: any) {
       setEditError(err?.message || 'Could not update profile details.');
     } finally {
@@ -376,11 +381,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
       </button>
 
       {/* Device Camera Avatar Modal */}
+      {showCongrats && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm px-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl border border-emerald-100">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 className="h-9 w-9" />
+            </div>
+            <h3 className="mt-4 text-xl font-black text-slate-900">Congratulations!</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Your profile details have been updated successfully.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowCongrats(false)}
+              className="mt-5 w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
       <CameraAvatarModal
         isOpen={isCameraModalOpen}
         onClose={() => setIsCameraModalOpen(false)}
         onSuccess={() => {
-          setSuccessToast('Custom profile photo saved to Firestore!');
+          setSuccessToast('Custom profile photo saved successfully.');
           setTimeout(() => setSuccessToast(null), 4000);
         }}
       />
