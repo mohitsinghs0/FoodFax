@@ -1,0 +1,477 @@
+[
+  {
+    "type": "dir",
+    "path": "src",
+    "id": "13UmCsKn3EFk7dg2y1sncYNRqDRSaClkB"
+  },
+  {
+    "type": "dir",
+    "path": "src/components",
+    "id": "16j7AAjPJnsq0-j90ep_k4dhN8Pt7YBZ_"
+  },
+  {
+    "type": "dir",
+    "path": "src/components/business",
+    "id": "1zMI3XomL7cslD3thvXMXfBto-4uhV2CU"
+  },
+  {
+    "type": "file",
+    "path": "src/components/business/BusinessLayout.tsx",
+    "id": "1a3mZtk7xeENwQGO9-UrHapizggH9OhbQ"
+  },
+  {
+    "type": "file",
+    "path": "src/components/business/OrderCard.tsx",
+    "id": "1W-Qyqh0cEEkqCZSttbi18QiWhGM2-oAx"
+  },
+  {
+    "type": "file",
+    "path": "src/components/business/RushModeView.tsx",
+    "id": "1l1nLDbgREKgAs-gBRked-Z4eEEalWKxt"
+  },
+  {
+    "type": "dir",
+    "path": "src/components/common",
+    "id": "1jvK2mUN_kZCgTsjfBZpdPSlc7Ja8b3vP"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/AccessibilityModal.tsx",
+    "id": "1PDAUpQjJ94beFDG3dwE2W89WtzNpoMdZ"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/ActiveOrderBanner.tsx",
+    "id": "1nmZj907w9xGQ3I0qFdQ4L5J1im3E7Zg8"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/BottomNav.tsx",
+    "id": "1TAhS3kMQxVynGhlSMWci2964E8e-MdfV"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/CartConflictModal.tsx",
+    "id": "1K6qoDYyM0FXHEytrWsKMBAT-DZQzqFkn"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/EmptyState.tsx",
+    "id": "1FITjjZ32fXSaNB4BjU_67qBEOFVKSguk"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/FloatingCartBar.tsx",
+    "id": "1rTpVIMwJEyRIvn7FQU4fVpPyAcF1dSpG"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/GlobalLoadingSkeleton.tsx",
+    "id": "1ro6-hO0mE5djsJKTKXWN7rn9fhT8hHfE"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/GoogleShopMap.tsx",
+    "id": "1zsTAjDK66DmTTJWcgktB39kn55U3aGIg"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/GPSLocationPicker.tsx",
+    "id": "1DZlkpLO2Ks4efJX-SElv6k-z62x9p7TR"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/Header.tsx",
+    "id": "1ZMwtGfA6u71fhg2Qhhf8Cs5WkiQe5Ktp"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/ProtectedRoute.tsx",
+    "id": "1T4vjO1eJbHZ2yrf6__Z-QX-b5lxnXCGT"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/QRScanModal.tsx",
+    "id": "1sPs3S-X-1k2GhAx0KlppGLp5imtaBY0k"
+  },
+  {
+    "type": "file",
+    "path": "src/components/common/VegBadge.tsx",
+    "id": "1r0ecmA13XdhR1tCsTQZpgAkPXzRiR3C4"
+  },
+  {
+    "type": "dir",
+    "path": "src/components/order",
+    "id": "1jhJpHaBUzfH3FdTy50ViA8wfzYMwAVgI"
+  },
+  {
+    "type": "file",
+    "path": "src/components/order/CancelOrderModal.tsx",
+    "id": "1PFZuZztjGGk6mbIFX8jhzGcaPkIr_TeG"
+  },
+  {
+    "type": "file",
+    "path": "src/components/order/LiveOrderTracker.tsx",
+    "id": "1DlYuDEFXcYTxC-PXhIZ9qlzberjzS9Dp"
+  },
+  {
+    "type": "file",
+    "path": "src/components/order/OrderRatingReview.tsx",
+    "id": "12wQ0EjVbUdTMN1jN2Cr_FHUmjttD19ZP"
+  },
+  {
+    "type": "file",
+    "path": "src/components/order/PostOrderFeedbackModal.tsx",
+    "id": "181etvJJsxTu9vPJALD3fKcv0Phq1PEhv"
+  },
+  {
+    "type": "file",
+    "path": "src/components/order/SpendingTrendsChart.tsx",
+    "id": "1BEotR3qA9eAsGFy9Rmngo03TOQlb85DT"
+  },
+  {
+    "type": "dir",
+    "path": "src/components/profile",
+    "id": "1SKxapZIgjuFXQDIed8KofIRoSEKft5_s"
+  },
+  {
+    "type": "file",
+    "path": "src/components/profile/CameraAvatarModal.tsx",
+    "id": "1n_jh0Coe4hBjJCYarZWvAOFg-nHW96IL"
+  },
+  {
+    "type": "dir",
+    "path": "src/components/shop",
+    "id": "1-nJ-gfjUkT7ur8DOuvyIS4yHmvJk2K6J"
+  },
+  {
+    "type": "file",
+    "path": "src/components/shop/MenuItemCard.tsx",
+    "id": "149DVU5ZxPCt8Ch-1JkthTfAkpF2MqO-3"
+  },
+  {
+    "type": "file",
+    "path": "src/components/shop/ShopCard.tsx",
+    "id": "1-cAbLVfr52A02arFRYylBtEPeazFtV2V"
+  },
+  {
+    "type": "dir",
+    "path": "src/context",
+    "id": "12oMnw9ObuTAiQw1-H8J9NmtUWM4muxzx"
+  },
+  {
+    "type": "file",
+    "path": "src/context/AccessibilityContext.tsx",
+    "id": "1Eg_2yacf9fVEopyIX6HhxIA3g8PuAMhq"
+  },
+  {
+    "type": "file",
+    "path": "src/context/AuthContext.tsx",
+    "id": "1oNKwZ3ZKG5uPJlp0zPzh5dCe0RcLe9Ex"
+  },
+  {
+    "type": "file",
+    "path": "src/context/CartContext.tsx",
+    "id": "1-p0T8kc0vuNG4LwQLJ1V5kda96FRbpyW"
+  },
+  {
+    "type": "file",
+    "path": "src/context/RouterContext.tsx",
+    "id": "1Yu4yEcVNhTl4jWeIupnM7WK9EVlQdrqW"
+  },
+  {
+    "type": "dir",
+    "path": "src/data",
+    "id": "16j9YNcx6jRpJwQfIDr7flsxzBoBv5FFq"
+  },
+  {
+    "type": "file",
+    "path": "src/data/mockData.ts",
+    "id": "13KMTGPqfz_oQBuD2Wzv7cw2r0eTCaEzN"
+  },
+  {
+    "type": "dir",
+    "path": "src/services",
+    "id": "16LmfCCjLWb4qiEbzaihrL23Vs4t2i7D-"
+  },
+  {
+    "type": "file",
+    "path": "src/services/authService.ts",
+    "id": "1xl-6uBgsJ59zIazf_tPYEQYnmaVnVGp3"
+  },
+  {
+    "type": "file",
+    "path": "src/services/customerService.ts",
+    "id": "1bUltDd1h3nDE6bURqMsBscaeO7mUKP4e"
+  },
+  {
+    "type": "file",
+    "path": "src/services/firestoreSyncService.ts",
+    "id": "1sWe7eeOS3J3gf3wTgpikrqvxeJPL7pir"
+  },
+  {
+    "type": "file",
+    "path": "src/services/geoService.ts",
+    "id": "1w5sOLdDIEAOmrIa1PJtVzV5dnfgj-GWj"
+  },
+  {
+    "type": "file",
+    "path": "src/services/menuService.ts",
+    "id": "1EuiVq-i3lEHjqq9BIyAq4sLU7lqlKJPH"
+  },
+  {
+    "type": "file",
+    "path": "src/services/notificationService.ts",
+    "id": "1Y88rq6SQcshfLY6sL2TGJ4QpX5fsuYDo"
+  },
+  {
+    "type": "file",
+    "path": "src/services/orderRealtimeService.ts",
+    "id": "1eQMsEfODbt7WIXiNSvL0KhfYS63veD_x"
+  },
+  {
+    "type": "file",
+    "path": "src/services/orderService.ts",
+    "id": "1VbvhOYcq7-PXgEDvD66yGjZc4DmPpCAJ"
+  },
+  {
+    "type": "file",
+    "path": "src/services/shopService.ts",
+    "id": "1-LC62euGieweueiAFRwQRZ84qXusjrrw"
+  },
+  {
+    "type": "dir",
+    "path": "src/utils",
+    "id": "13TLl9yvLPsbjkE0TwWOdWEHWiEQfZbjW"
+  },
+  {
+    "type": "file",
+    "path": "src/utils/orderValidation.ts",
+    "id": "1BIekgKtGwp2esc2bY85o5JH7wR22DxCG"
+  },
+  {
+    "type": "dir",
+    "path": "src/views",
+    "id": "1e4SROvbhaDosKjmvldvkr4tFQn0lkswC"
+  },
+  {
+    "type": "dir",
+    "path": "src/views/business",
+    "id": "10Or3VxFd5j-GlsjC5wnYru825XzsXUtO"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessAvailabilityView.tsx",
+    "id": "1E8HX6oQVILLbUEOG302onQvqFkRz4FDZ"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessDashboardView.tsx",
+    "id": "1Vd6Kqx71VxRJDBUEKZN1wncxVgrv7C0U"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessItemFormView.tsx",
+    "id": "1HrsjGqtPFR71r8EMps5PhmkrRHuRkrUg"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessMenuView.tsx",
+    "id": "1LRtodlgZEh2aIOJOi7TtWQIMN12bOnFg"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessNotificationsView.tsx",
+    "id": "125-ZUAXv4OMKpKU_pycKQqgGUHjt2b5r"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessOrderDetailView.tsx",
+    "id": "1UDXJF6ADA35oek3a1j4yZlQtgA5WeBab"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessOrdersView.tsx",
+    "id": "18Bbm4PviQK9lgGnSN1JUAwpuDUGTk3FY"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessQRView.tsx",
+    "id": "17rhLwcyG75vHG_c7UdL6nVnWEkb7qvx6"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessSalesView.tsx",
+    "id": "1SDHEFqjVh6gRJbajak6YD6R1NnfqhqG_"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessSettingsView.tsx",
+    "id": "1a0rt0McpSjaRmSeERi87NO1mI0Q2EVDc"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/BusinessShopProfileView.tsx",
+    "id": "1hn1Ja5WBjB7uiR77_IVB0s7_mUdpokD9"
+  },
+  {
+    "type": "file",
+    "path": "src/views/business/SetupShopView.tsx",
+    "id": "1gM-l5Hf0FUIihwmPzmddbveyom60twc_"
+  },
+  {
+    "type": "file",
+    "path": "src/views/CartView.tsx",
+    "id": "1ulDMYSTYgMfIEXEcGuUM9DA3UKqAb_0N"
+  },
+  {
+    "type": "file",
+    "path": "src/views/CheckoutView.tsx",
+    "id": "1gSZHDly_cxBHAgvPedyxxjk_4GnxToFd"
+  },
+  {
+    "type": "file",
+    "path": "src/views/CompleteProfileView.tsx",
+    "id": "1wjQ-9lsAv3qGQRCDe1sQB27yC67m-qgR"
+  },
+  {
+    "type": "file",
+    "path": "src/views/HomeView.tsx",
+    "id": "1QTdg_69GKQYzrIiU99mlJzW33J7omvUf"
+  },
+  {
+    "type": "file",
+    "path": "src/views/LoginView.tsx",
+    "id": "1nFTXh18JBVEedWxpC6qnyYP5tebJ3BQO"
+  },
+  {
+    "type": "file",
+    "path": "src/views/OrdersHistoryView.tsx",
+    "id": "18ksLsAC7Yc6T66RyIb2MffQCXSYK8gEu"
+  },
+  {
+    "type": "file",
+    "path": "src/views/OrderTrackerView.tsx",
+    "id": "1tLZpGlnCt9vPhdplqpCE_ptAlle00FGf"
+  },
+  {
+    "type": "file",
+    "path": "src/views/ProfileView.tsx",
+    "id": "1KoO5tdH93ebysTi4htrRqt2MIAD-03B4"
+  },
+  {
+    "type": "file",
+    "path": "src/views/RegisterView.tsx",
+    "id": "1HmQyzJuL4iEFjC5h-QrtK-vgoYbGwMAR"
+  },
+  {
+    "type": "file",
+    "path": "src/views/SavedShopsView.tsx",
+    "id": "1hmAuL8K-GIV5NFTFDf1Zv4tlievPFTr0"
+  },
+  {
+    "type": "file",
+    "path": "src/views/SearchView.tsx",
+    "id": "15jxkZcNWDIcU_0_iYlVVfw3VwcySbsNE"
+  },
+  {
+    "type": "file",
+    "path": "src/views/ShopDetailView.tsx",
+    "id": "1ZvVYnHIChduslf7QoAkoI0ln3AkJHPfc"
+  },
+  {
+    "type": "file",
+    "path": "src/views/ShopsView.tsx",
+    "id": "1GXzfLnWNn8sLt4ZQk-ZP_U63Yu1zqjh9"
+  },
+  {
+    "type": "file",
+    "path": "src/App.tsx",
+    "id": "1c5UFlNNiG-mBaITbS31mhP8aXndPo-7X"
+  },
+  {
+    "type": "file",
+    "path": "src/index.css",
+    "id": "1iZjBwDegVjASysuUF_f0CBUYI_lflUZ4"
+  },
+  {
+    "type": "file",
+    "path": "src/main.tsx",
+    "id": "1tXfgPzX2jTwr1OipbvEjoFp4j0k5aMF4"
+  },
+  {
+    "type": "file",
+    "path": "src/supabase.ts",
+    "id": "1v6rq63xAWMd6cgbTiO58KybpfpiNwIA2"
+  },
+  {
+    "type": "file",
+    "path": "src/types.ts",
+    "id": "1fYfcB1NICynn3MWvQqZlcLRLe__Wfxj1"
+  },
+  {
+    "type": "file",
+    "path": "src/vite-env.d.ts",
+    "id": "11xhUGzO8539C6AQkJ9HAUXt76imJcWYb"
+  },
+  {
+    "type": "dir",
+    "path": "supabase",
+    "id": "1yEGhjPxawOrJjbb32U1_2U3wU7d7nJs-"
+  },
+  {
+    "type": "file",
+    "path": "supabase/schema.sql",
+    "id": "1TggwOUl72JHJ_sakWp16D10eizAYQI9_"
+  },
+  {
+    "type": "file",
+    "path": "supabase/seed.sql",
+    "id": "1kAUQrPKV7TIwUsYVM_QtaBm6kAfKav0m"
+  },
+  {
+    "type": "file",
+    "path": ".env.example",
+    "id": "1yQu9pn6igM5o2jXB9VYQS5RweU6Q3wb3"
+  },
+  {
+    "type": "file",
+    "path": ".gitignore",
+    "id": "1D06nJhSJArsfC9MoqQ09CbrxBvQYP9KO"
+  },
+  {
+    "type": "file",
+    "path": "bun.lock",
+    "id": "1uGuGOT1NdQ2IWNdFw7t5U4Y3BTLb7LOr"
+  },
+  {
+    "type": "file",
+    "path": "index.html",
+    "id": "1t6m6aYWYHaS58SWxD0n0xZXM8l1k3FUF"
+  },
+  {
+    "type": "file",
+    "path": "metadata.json",
+    "id": "1kPqJ0reuKcVBbx3WoAK0Qqb4lqJyeNp6"
+  },
+  {
+    "type": "file",
+    "path": "package.json",
+    "id": "1pgd7hIBtqpy5bGq1HofnSAwi4ViE8Eyh"
+  },
+  {
+    "type": "file",
+    "path": "README.md",
+    "id": "1eCIS8lvaekVP1hPoZAjYmOteONNr517e"
+  },
+  {
+    "type": "file",
+    "path": "tsconfig.json",
+    "id": "188xnSBWlyHY5UFhSUDrYgsl0LS5LTj4W"
+  },
+  {
+    "type": "file",
+    "path": "vite.config.ts",
+    "id": "1amqd4QxRC-9KRPHXW0_gvBp88FoPoXU-"
+  }
+]

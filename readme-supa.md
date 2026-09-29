@@ -1,0 +1,13 @@
+# FoodFax Supabase Configuration & Credentials
+
+Project url:- https://aftmqdmiwvpbpsdmsfbu.supabase.co
+
+Anon key:- eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmdG1xZG1pd3ZwYnBzZG1zZmJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwOTA4NDgsImV4cCI6MjEwNTY2Njg0OH0.c6_X6H2aLyYMH_Sg9EA9tVQr-tpHY8s9Nyjo_HznBlE
+
+service role:- eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmdG1xZG1pd3ZwYnBzZG1zZmJ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDA5MDg0OCwiZXhwIjoyMTA1NjY2ODQ4fQ.SH3GmN3OeKtuXfcfvWU3GZVdejnerVuiXqEY3BLJkwA
+
+Publishable key:- sb_publishable_O-f6YGUbj6hqHYBlwEhE5g_QVrnke9m
+
+Secret key:- sb_secret__a9MN-LlOQj6x-mjH7Ew8g_E31-eqLj
+
+Map Key:- AIzaSyCy0KAJ11MUKY9sbjL2OSjawwj9D1IPWZM
