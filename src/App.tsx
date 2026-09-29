@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { RouterProvider, useRouter } from './context/RouterContext';
 import { CartProvider } from './context/CartContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
@@ -224,6 +225,7 @@ export default function App() {
         <RouterProvider>
           <CartProvider>
             <AppContent />
+            <Analytics />
           </CartProvider>
         </RouterProvider>
       </AuthProvider>
