@@ -173,7 +173,7 @@ const AppContent: React.FC = () => {
       route.name === 'setup-shop');
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white relative">
+    <div className="min-h-screen min-h-[100dvh] w-full overflow-x-hidden bg-[#F8F9FA] text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white relative">
       {/* Accessible Skip Navigation Link */}
       <a
         href="#main-content"
@@ -192,7 +192,7 @@ const AppContent: React.FC = () => {
       {!isBusinessRoute && <ActiveOrderBanner />}
 
       {/* Main Page Area */}
-      <main id="main-content" tabIndex={-1} className="flex-1 w-full max-w-7xl mx-auto focus:outline-none">
+      <main id="main-content" tabIndex={-1} className="flex-1 w-full max-w-7xl mx-auto focus:outline-none overflow-x-hidden min-w-0">
         {renderCustomerView()}
       </main>
 

@@ -110,17 +110,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
   const isOwner = role === 'owner';
 
   return (
-    <div className="py-4 sm:py-6 px-4 sm:px-6 max-w-2xl mx-auto space-y-6 pb-28">
+    <div className="py-4 sm:py-6 px-3.5 sm:px-6 max-w-2xl mx-auto space-y-5 sm:space-y-6 pb-28 min-w-0 overflow-x-hidden">
       {/* Toast Alert */}
       {successToast && (
         <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-200 shadow-xs">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span>{successToast}</span>
+            <span className="truncate">{successToast}</span>
           </div>
           <button
             onClick={() => setSuccessToast(null)}
-            className="text-emerald-700 hover:text-emerald-900 font-extrabold text-sm ml-2"
+            className="text-emerald-700 hover:text-emerald-900 font-extrabold text-sm ml-2 flex-shrink-0"
           >
             ✕
           </button>
@@ -128,18 +128,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
       )}
 
       {/* Profile Card */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
-        <div className="flex items-center gap-4">
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-6 shadow-2xs">
+        <div className="flex items-center gap-3 sm:gap-4">
           {/* Avatar with Camera badge */}
           <div className="relative flex-shrink-0">
             {currentUser?.photoUrl && currentUser.photoUrl.trim() !== '' ? (
               <img
                 src={currentUser.photoUrl.trim()}
                 alt={currentUser?.fullName || 'User Avatar'}
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-orange-500 shadow-md shadow-orange-500/20"
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-orange-500 shadow-md shadow-orange-500/20"
               />
             ) : (
-              <div className="w-16 h-16 rounded-2xl bg-orange-500 text-white flex items-center justify-center font-black text-2xl shadow-md shadow-orange-500/20">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-500 text-white flex items-center justify-center font-black text-xl sm:text-2xl shadow-md shadow-orange-500/20">
                 {currentUser?.fullName?.charAt(0) || currentUser?.name?.charAt(0) || 'U'}
               </div>
             )}
@@ -156,23 +156,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 truncate">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h1 className="text-base sm:text-xl font-black text-slate-900 truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
                 {currentUser?.fullName || currentUser?.name || 'Customer'}
               </h1>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-orange-100 text-orange-800">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-orange-100 text-orange-800 flex-shrink-0">
                 {role || 'Customer'}
               </span>
             </div>
 
-            <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
-              <Phone className="w-3.5 h-3.5 text-slate-400" />
-              <span>{currentUser?.phone || '+91 98765 43210'}</span>
+            <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1 truncate">
+              <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <span className="truncate">{currentUser?.phone || '+91 98765 43210'}</span>
             </p>
 
             {currentUser?.email && (
-              <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                <Mail className="w-3.5 h-3.5 text-slate-400" />
+              <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate">
+                <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                 <span className="truncate">{currentUser.email}</span>
               </p>
             )}
@@ -181,7 +181,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
           <button
             type="button"
             onClick={startEditing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors flex-shrink-0"
           >
             <Pencil className="w-3.5 h-3.5" />
             <span>Edit</span>
@@ -307,66 +307,66 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs divide-y divide-slate-100 overflow-hidden">
         <button
           onClick={() => navigate('/orders')}
-          className="w-full p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-3.5 sm:p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors gap-3"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
               <ShoppingBag className="w-4 h-4" />
             </div>
-            <div>
-              <h4 className="font-bold text-xs text-slate-900">Your Orders & Tokens</h4>
-              <p className="text-[11px] text-slate-500">Live order status, past receipts & tokens</p>
+            <div className="min-w-0 flex-1">
+              <h4 className="font-bold text-xs text-slate-900 truncate">Your Orders & Tokens</h4>
+              <p className="text-[11px] text-slate-500 truncate">Live order status, past receipts & tokens</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
+          <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
         </button>
 
         <button
           onClick={() => navigate('/saved')}
-          className="w-full p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-3.5 sm:p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors gap-3"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
               <Heart className="w-4 h-4" />
             </div>
-            <div>
-              <h4 className="font-bold text-xs text-slate-900">Saved Stalls</h4>
-              <p className="text-[11px] text-slate-500">Your favorite local tapris and food counters</p>
+            <div className="min-w-0 flex-1">
+              <h4 className="font-bold text-xs text-slate-900 truncate">Saved Stalls</h4>
+              <p className="text-[11px] text-slate-500 truncate">Your favorite local tapris and food counters</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
+          <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
         </button>
 
         <button
           onClick={onOpenQRScanner}
-          className="w-full p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-3.5 sm:p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors gap-3"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
               <QrCode className="w-4 h-4" />
             </div>
-            <div>
-              <h4 className="font-bold text-xs text-slate-900">Scan Stall Counter QR</h4>
-              <p className="text-[11px] text-slate-500">Instantly open stall menu and order</p>
+            <div className="min-w-0 flex-1">
+              <h4 className="font-bold text-xs text-slate-900 truncate">Scan Stall Counter QR</h4>
+              <p className="text-[11px] text-slate-500 truncate">Instantly open stall menu and order</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
+          <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
         </button>
 
         <button
           onClick={openA11yModal}
-          className="w-full p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-3.5 sm:p-4 text-left flex items-center justify-between hover:bg-slate-50 transition-colors gap-3"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
               <Volume2 className="w-4 h-4" />
             </div>
-            <div>
-              <h4 className="font-bold text-xs text-slate-900">Accessibility & Audio Chimes</h4>
-              <p className="text-[11px] text-slate-500">Voice token caller, high contrast, sound alerts</p>
+            <div className="min-w-0 flex-1">
+              <h4 className="font-bold text-xs text-slate-900 truncate">Accessibility & Audio Chimes</h4>
+              <p className="text-[11px] text-slate-500 truncate">Voice token caller, high contrast, sound alerts</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
+          <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
         </button>
       </div>
 

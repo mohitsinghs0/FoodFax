@@ -537,23 +537,23 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
 
         {/* Big Bold Token Number */}
         <div className="relative z-10 my-1">
-          <span className="text-xs uppercase tracking-widest text-slate-500 font-extrabold block">
+          <span className="text-[11px] sm:text-xs uppercase tracking-widest text-slate-500 font-extrabold block">
             Counter Token Number
           </span>
           <div 
             tabIndex={0}
             aria-label={`Token number ${order.tokenNumber}`}
-            className="text-6xl sm:text-7xl font-black tracking-tight text-slate-900 font-mono my-0.5 select-all"
+            className="text-5xl sm:text-7xl font-black tracking-tight text-slate-900 font-mono my-0.5 select-all"
           >
             {order.tokenNumber}
           </div>
         </div>
 
         {/* 4-Digit Security PIN & Barcode Simulator */}
-        <div className="relative z-10 inline-flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 my-2">
+        <div className="relative z-10 inline-flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 my-2 flex-wrap justify-center">
           <span className="text-slate-500 font-medium">Pickup PIN:</span>
           <span className="font-mono font-black text-slate-900 text-sm tracking-wider">{pickupPin}</span>
-          <span className="text-slate-300">|</span>
+          <span className="text-slate-300 hidden xs:inline">|</span>
           <button 
             onClick={() => setShowPickupPassModal(true)}
             className="text-orange-700 hover:text-orange-800 hover:underline flex items-center gap-1"
@@ -583,53 +583,53 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
         </div>
 
         {/* Quick Toolbar */}
-        <div className="relative z-10 mt-4 flex items-center justify-center flex-wrap gap-2">
+        <div className="relative z-10 mt-4 grid grid-cols-2 sm:flex sm:flex-wrap sm:justify-center gap-2 w-full">
           <button
             onClick={playVoiceAnnouncement}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-orange-600"
+            className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-orange-600 active:scale-95"
             aria-label="Speak order token announcement using text to speech"
           >
-            <Volume2 className="w-3.5 h-3.5 text-orange-600" />
-            <span>{isSpeaking ? 'Speaking...' : 'Voice Announce'}</span>
+            <Volume2 className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+            <span className="truncate">{isSpeaking ? 'Speaking...' : 'Voice Call'}</span>
           </button>
 
           {/* Status animation trigger button for testing & replay */}
           <button
             onClick={triggerReadyAnimation}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-colors border border-emerald-200 focus-visible:ring-2 focus-visible:ring-emerald-600"
+            className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-colors border border-emerald-200 focus-visible:ring-2 focus-visible:ring-emerald-600 active:scale-95"
             title="Preview the subtle status update transition animation"
             aria-label="Preview ready status animation"
           >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{isReadyTransitioning ? 'Updating Status...' : 'Preview Ready Alert'}</span>
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+            <span className="truncate">{isReadyTransitioning ? 'Updating...' : 'Ready Alert'}</span>
           </button>
 
           <button
             onClick={handleShareToken}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-orange-600"
+            className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-orange-600 active:scale-95"
             aria-label="Share token with friend or save to clipboard"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-slate-600" />}
-            <span>{copied ? 'Copied!' : 'Share Token'}</span>
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" /> : <Share2 className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
+            <span className="truncate">{copied ? 'Copied!' : 'Share'}</span>
           </button>
 
           <button
             onClick={printReceipt}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-orange-600"
+            className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-orange-600 active:scale-95"
             aria-label="Print or save digital counter receipt"
           >
-            <Printer className="w-3.5 h-3.5 text-slate-600" />
-            <span>Print Pass</span>
+            <Printer className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
+            <span className="truncate">Print Pass</span>
           </button>
 
           {/* Cancellation Trigger */}
           {!isCancelled && !isCompleted && (
             <button
               onClick={() => setShowCancelModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-colors border border-red-200 focus-visible:ring-2 focus-visible:ring-red-600"
+              className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-colors border border-red-200 focus-visible:ring-2 focus-visible:ring-red-600 active:scale-95"
               aria-label="Cancel this order"
             >
-              <XCircle className="w-3.5 h-3.5 text-red-600" />
+              <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
               <span>Cancel Order</span>
             </button>
           )}
@@ -758,11 +758,11 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
       {/* 4. TRACKER NAVIGATION TABS */}
       <nav 
         aria-label="Tracker section tabs"
-        className="flex items-center p-1 bg-slate-200/70 rounded-2xl text-xs font-bold text-slate-700"
+        className="grid grid-cols-4 p-1 bg-slate-200/70 rounded-2xl text-[11px] sm:text-xs font-bold text-slate-700 gap-1 w-full"
       >
         <button
           onClick={() => setActiveTab('timeline')}
-          className={`flex-1 py-2 px-2.5 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all truncate text-center ${
             activeTab === 'timeline'
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
@@ -770,11 +770,11 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
           aria-selected={activeTab === 'timeline'}
           role="tab"
         >
-          Live Pipeline
+          <span className="hidden sm:inline">Live </span>Pipeline
         </button>
         <button
           onClick={() => setActiveTab('map')}
-          className={`flex-1 py-2 px-2.5 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all truncate text-center ${
             activeTab === 'map'
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
@@ -782,11 +782,11 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
           aria-selected={activeTab === 'map'}
           role="tab"
         >
-          Stall & Directions
+          Directions
         </button>
         <button
           onClick={() => setActiveTab('messages')}
-          className={`flex-1 py-2 px-2.5 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all truncate text-center ${
             activeTab === 'messages'
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
@@ -794,11 +794,11 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
           aria-selected={activeTab === 'messages'}
           role="tab"
         >
-          Stall Signals ({customerSignals.length})
+          Signals ({customerSignals.length})
         </button>
         <button
           onClick={() => setActiveTab('receipt')}
-          className={`flex-1 py-2 px-2.5 rounded-xl transition-all ${
+          className={`py-2 px-1 rounded-xl transition-all truncate text-center ${
             activeTab === 'receipt'
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'

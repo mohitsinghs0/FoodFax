@@ -94,31 +94,31 @@ export const SearchView: React.FC = () => {
   }, [menuItems, normalizedQuery, selectedCategory, onlyVeg]);
 
   return (
-    <div className="py-4 sm:py-6 px-4 sm:px-6 max-w-5xl mx-auto space-y-5">
+    <div className="py-4 sm:py-6 px-3 sm:px-6 max-w-5xl mx-auto space-y-4 sm:space-y-5 pb-28 overflow-x-hidden min-w-0">
       {/* Search Input Bar */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5 sm:gap-3">
         <button
           onClick={goBack}
-          className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors"
+          className="p-2 sm:p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors flex-shrink-0"
           aria-label="Go back"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search stalls, dishes (Vada Pav, Chai, Dosa, Thali)..."
-            className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white border border-slate-200 shadow-xs text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+            placeholder="Search stalls, dishes (Vada Pav, Chai)..."
+            className="w-full pl-10 sm:pl-11 pr-9 py-2.5 sm:py-3 rounded-2xl bg-white border border-slate-200 shadow-xs text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
             autoFocus
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -127,19 +127,19 @@ export const SearchView: React.FC = () => {
       </div>
 
       {/* Tabs & Veg Filter */}
-      <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1">
-        <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+      <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-1 w-full min-w-0 py-0.5">
+        <div className="flex bg-slate-100 p-1 rounded-xl gap-1 flex-shrink-0">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            All Results
+            All
           </button>
           <button
             onClick={() => setActiveTab('dishes')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'dishes' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -147,7 +147,7 @@ export const SearchView: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('shops')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'shops' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -165,12 +165,12 @@ export const SearchView: React.FC = () => {
           }`}
         >
           <span className="w-2 h-2 rounded-full bg-emerald-600" />
-          Pure Veg
+          <span>Pure Veg</span>
         </button>
       </div>
 
       {/* Categories Horizontal Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 w-full min-w-0 py-0.5">
         <button
           onClick={() => setSelectedCategory('all')}
           className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${

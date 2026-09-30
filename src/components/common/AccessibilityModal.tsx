@@ -98,16 +98,16 @@ export const AccessibilityModal: React.FC = () => {
         } overflow-hidden max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-150`}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-bold">
-              <Sliders className="w-5 h-5" />
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 gap-2">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-bold flex-shrink-0">
+              <Sliders className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <h2 id="a11y-modal-title" className="text-base font-bold text-slate-900 leading-tight">
+            <div className="min-w-0 flex-1">
+              <h2 id="a11y-modal-title" className="text-sm sm:text-base font-bold text-slate-900 leading-tight truncate">
                 Accessibility Preferences
               </h2>
-              <p id="a11y-modal-desc" className="text-xs text-slate-500 font-medium">
+              <p id="a11y-modal-desc" className="text-[11px] sm:text-xs text-slate-500 font-medium truncate">
                 Automatic system theme detection & accessible controls
               </p>
             </div>
@@ -115,7 +115,7 @@ export const AccessibilityModal: React.FC = () => {
           <button
             ref={closeBtnRef}
             onClick={closeA11yModal}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors focus-visible:ring-2 focus-visible:ring-orange-600"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors focus-visible:ring-2 focus-visible:ring-orange-600 flex-shrink-0"
             aria-label="Close accessibility settings"
           >
             <X className="w-5 h-5" />
@@ -123,7 +123,7 @@ export const AccessibilityModal: React.FC = () => {
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 text-sm">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 text-sm">
           {/* System Detection Live Status Card */}
           <div className="p-3.5 rounded-2xl bg-orange-50/60 border border-orange-200/80 space-y-2">
             <div className="flex items-center gap-2">

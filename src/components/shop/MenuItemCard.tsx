@@ -30,7 +30,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
   return (
     <div
       id={`menu-item-${item.id}`}
-      className={`relative bg-white rounded-2xl border p-3.5 sm:p-4 transition-all flex gap-3.5 sm:gap-4 ${
+      className={`relative bg-white rounded-2xl border p-3 sm:p-4 transition-all flex gap-3 sm:gap-4 overflow-hidden min-w-0 ${
         item.isAvailable
           ? 'border-slate-200/90 hover:border-orange-200 hover:shadow-xs'
           : 'border-slate-200/60 bg-slate-50/60 opacity-75'
@@ -43,13 +43,13 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
             <VegBadge isVeg={item.isVeg} size="sm" />
             {item.isBestseller && (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-tight bg-amber-50 text-amber-700 border border-amber-200/60">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-tight bg-amber-50 text-amber-700 border border-amber-200/60 flex-shrink-0">
                 <Flame className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                 Popular
               </span>
             )}
             {item.preparationTimeMin && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-500">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-500 flex-shrink-0">
                 <Clock className="w-2.5 h-2.5" />
                 ~{item.preparationTimeMin}m
               </span>
@@ -58,7 +58,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
 
           {/* Item Name */}
           <h4
-            className={`font-bold text-sm sm:text-base leading-snug ${
+            className={`font-bold text-sm sm:text-base leading-snug line-clamp-2 ${
               item.isAvailable ? 'text-slate-900' : 'text-slate-500 line-through'
             }`}
           >
@@ -71,7 +71,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
           </p>
 
           {/* Description */}
-          <p className="text-xs text-slate-500 line-clamp-2 mt-1 leading-relaxed">
+          <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-2 mt-1 leading-relaxed">
             {item.description}
           </p>
         </div>
@@ -79,7 +79,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
         {/* Unavailable label if out of stock */}
         {!item.isAvailable && (
           <div className="mt-2">
-            <span className="inline-block text-[11px] font-bold text-rose-600 uppercase tracking-wider bg-rose-50 px-2 py-0.5 rounded border border-rose-200/60">
+            <span className="inline-block text-[10px] sm:text-[11px] font-bold text-rose-600 uppercase tracking-wider bg-rose-50 px-2 py-0.5 rounded border border-rose-200/60">
               Currently Unavailable
             </span>
           </div>
@@ -87,9 +87,9 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
       </div>
 
       {/* Right Image + Action Stepper */}
-      <div className="relative w-28 sm:w-32 flex flex-col items-center justify-between flex-shrink-0">
+      <div className="relative w-22 sm:w-28 flex flex-col items-center justify-between flex-shrink-0">
         {/* Item Image */}
-        <div className="relative w-24 h-20 sm:w-28 sm:h-24 rounded-xl overflow-hidden bg-slate-100">
+        <div className="relative w-22 h-20 sm:w-28 sm:h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
           <img
             src={item.image?.trim() ? item.image : DEFAULT_MENU_IMG}
             alt={item.name}
@@ -112,7 +112,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
           {!item.isAvailable ? (
             <button
               disabled
-              className="px-4 py-1.5 rounded-xl bg-slate-200 text-slate-400 text-xs font-bold cursor-not-allowed border border-slate-300"
+              className="px-3 sm:px-4 py-1.5 rounded-xl bg-slate-200 text-slate-400 text-xs font-bold cursor-not-allowed border border-slate-300 whitespace-nowrap"
             >
               Unavailable
             </button>
@@ -121,7 +121,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
               id={`add-btn-${item.id}`}
               onClick={handleAdd}
               disabled={!shop.isOpen}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
+              className={`flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 touch-manipulation ${
                 shop.isOpen
                   ? 'bg-white text-orange-600 border border-orange-200 hover:bg-orange-50 hover:border-orange-300 shadow-orange-500/10'
                   : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
@@ -131,7 +131,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
               <span>Add</span>
             </button>
           ) : (
-            <div className="flex items-center justify-between bg-orange-600 text-white rounded-xl shadow-md shadow-orange-600/25 border border-orange-500 px-1 py-0.5 w-24">
+            <div className="flex items-center justify-between bg-orange-600 text-white rounded-xl shadow-md shadow-orange-600/25 border border-orange-500 px-1 py-0.5 w-22 sm:w-24 touch-manipulation">
               <button
                 id={`decrement-${item.id}`}
                 onClick={handleDecrement}

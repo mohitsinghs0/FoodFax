@@ -32,21 +32,21 @@ export const SavedShopsView: React.FC = () => {
   };
 
   return (
-    <div className="py-4 sm:py-6 px-4 sm:px-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
+    <div className="py-4 sm:py-6 px-3.5 sm:px-6 max-w-5xl mx-auto space-y-5 sm:space-y-6 pb-28 sm:pb-12 min-w-0 overflow-x-hidden">
+      <div className="flex items-center gap-2.5 sm:gap-3">
         <button
           onClick={goBack}
-          className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors"
+          className="p-2 sm:p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors flex-shrink-0"
           aria-label="Go back"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
-            <Heart className="w-6 h-6 text-red-500 fill-red-500" />
-            Saved Stalls & Tapris
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg sm:text-2xl font-black text-slate-900 flex items-center gap-2 truncate">
+            <Heart className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 fill-red-500 flex-shrink-0" />
+            <span className="truncate">Saved Stalls & Tapris</span>
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
             Quick access to your favorite local food counters
           </p>
         </div>

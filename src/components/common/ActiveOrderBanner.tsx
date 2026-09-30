@@ -110,7 +110,7 @@ export const ActiveOrderBanner: React.FC = () => {
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
             <div 
               onClick={() => setIsFeedbackModalOpen(true)}
-              className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1"
+              className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group min-w-0 flex-1"
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -125,12 +125,12 @@ export const ActiveOrderBanner: React.FC = () => {
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/25 text-amber-100 flex items-center gap-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/25 text-amber-100 flex items-center gap-1 flex-shrink-0">
                     <CheckCircle2 className="w-3 h-3 text-emerald-300" />
-                    <span>Order Complete</span>
+                    <span>Done</span>
                   </span>
-                  <span className="text-xs font-bold text-white truncate">
+                  <span className="text-xs font-bold text-white truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
                     {unreviewedCompletedOrder.shopName}
                   </span>
                 </div>
@@ -140,13 +140,13 @@ export const ActiveOrderBanner: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
               <button
                 onClick={() => setIsFeedbackModalOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-50 text-amber-900 font-extrabold text-xs transition-transform active:scale-95 flex items-center gap-1.5 shadow-sm"
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-amber-50 text-amber-900 font-extrabold text-xs transition-transform active:scale-95 flex items-center gap-1 shadow-sm"
               >
                 <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                <span>Rate Stall</span>
+                <span>Rate<span className="hidden xs:inline"> Stall</span></span>
               </button>
 
               <button
@@ -187,12 +187,12 @@ export const ActiveOrderBanner: React.FC = () => {
 
   const statusLabel = 
     activeOrder.orderStatus === 'READY'
-      ? 'READY FOR PICKUP'
+      ? 'READY'
       : activeOrder.orderStatus === 'PREPARING'
-      ? 'PREPARING IN KITCHEN'
+      ? 'PREPARING'
       : activeOrder.orderStatus === 'ACCEPTED'
-      ? 'ORDER ACCEPTED'
-      : 'ORDER PLACED';
+      ? 'ACCEPTED'
+      : 'PLACED';
 
   const playChime = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -202,7 +202,7 @@ export const ActiveOrderBanner: React.FC = () => {
 
   if (minimized) {
     return (
-      <div className="fixed bottom-20 sm:bottom-6 right-4 z-40 animate-in fade-in slide-in-from-bottom-3 duration-200">
+      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 right-4 z-40 animate-in fade-in slide-in-from-bottom-3 duration-200">
         <button
           onClick={() => setMinimized(false)}
           className={`flex items-center gap-2 px-3 py-2 rounded-2xl shadow-xl text-xs font-bold transition-transform active:scale-95 ${
@@ -223,13 +223,13 @@ export const ActiveOrderBanner: React.FC = () => {
   return (
     <aside
       aria-label="Active live order status"
-      className="sticky top-16 z-25 w-full bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 text-white shadow-md border-b border-orange-500/40"
+      className="sticky top-15 sm:top-16 z-25 w-full bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 text-white shadow-md border-b border-orange-500/40"
     >
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between gap-2 sm:gap-3">
         {/* Token & Info */}
         <div 
           onClick={() => navigate(`/order/${activeOrder.id}`)}
-          className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1"
+          className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group min-w-0 flex-1"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -241,13 +241,13 @@ export const ActiveOrderBanner: React.FC = () => {
           aria-label={`View live tracker for token ${activeOrder.tokenNumber} at ${activeOrder.shopName}`}
         >
           {/* Token badge */}
-          <div className="flex-shrink-0 px-2.5 py-1 rounded-xl bg-white text-orange-900 font-mono font-black text-sm sm:text-base tracking-tight shadow-sm border border-orange-200">
+          <div className="flex-shrink-0 px-2 sm:px-2.5 py-1 rounded-xl bg-white text-orange-900 font-mono font-black text-xs sm:text-base tracking-tight shadow-sm border border-orange-200">
             {activeOrder.tokenNumber}
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/20 text-orange-100 flex items-center gap-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full bg-black/20 text-orange-100 flex items-center gap-1 flex-shrink-0">
                 {isReady ? (
                   <Sparkles className="w-3 h-3 text-amber-300" />
                 ) : (
@@ -255,7 +255,7 @@ export const ActiveOrderBanner: React.FC = () => {
                 )}
                 <span>{statusLabel}</span>
               </span>
-              <span className="text-xs font-bold text-white truncate group-hover:underline">
+              <span className="text-xs font-bold text-white truncate max-w-[110px] xs:max-w-[160px] sm:max-w-none group-hover:underline">
                 {activeOrder.shopName}
               </span>
             </div>
@@ -268,27 +268,27 @@ export const ActiveOrderBanner: React.FC = () => {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
           <button
             onClick={playChime}
             className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-colors"
             title="Play token announcement sound"
             aria-label="Sound chime"
           >
-            <Volume2 className="w-4 h-4" />
+            <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
           <button
             onClick={() => navigate(`/order/${activeOrder.id}`)}
-            className="px-3 py-1.5 rounded-xl bg-white text-orange-900 hover:bg-orange-50 font-bold text-xs transition-colors flex items-center gap-1 shadow-sm"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white text-orange-900 hover:bg-orange-50 font-bold text-xs transition-colors flex items-center gap-1 shadow-sm"
           >
-            <span>Track Live</span>
+            <span>Track<span className="hidden xs:inline"> Live</span></span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={() => setMinimized(true)}
-            className="p-1.5 rounded-xl hover:bg-white/20 text-orange-200 hover:text-white transition-colors"
+            className="p-1 sm:p-1.5 rounded-xl hover:bg-white/20 text-orange-200 hover:text-white transition-colors"
             title="Minimize tracking banner"
             aria-label="Minimize order tracker bar"
           >

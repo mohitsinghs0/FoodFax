@@ -71,30 +71,30 @@ export const ShopsView: React.FC = () => {
   });
 
   return (
-    <div className="py-4 sm:py-6 px-4 sm:px-6 max-w-6xl mx-auto space-y-6">
+    <div className="py-4 sm:py-6 px-3.5 sm:px-6 max-w-6xl mx-auto space-y-5 sm:space-y-6 pb-28 sm:pb-12 min-w-0 overflow-x-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
           <button
             onClick={goBack}
-            className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors"
+            className="p-2 sm:p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors flex-shrink-0"
             aria-label="Go back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Store className="w-6 h-6 text-orange-500" />
-              All Food Counters & Stalls
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2 truncate">
+              <Store className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500 flex-shrink-0" />
+              <span className="truncate">All Food Stalls</span>
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
               Browse authentic local thelas, tapris, college canteens & food kiosks
             </p>
           </div>
         </div>
 
         {/* Quick Search */}
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-72 flex-shrink-0">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
@@ -107,14 +107,14 @@ export const ShopsView: React.FC = () => {
       </div>
 
       {/* Filter Chips Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-slate-200/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-1 border-t border-slate-200/80 w-full min-w-0">
         {/* Stall Types Horizontal Scroll */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 w-full min-w-0">
           {STALL_TYPES.map((t) => (
             <button
               key={t}
               onClick={() => setSelectedStallType(t)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${
                 selectedStallType === t
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'

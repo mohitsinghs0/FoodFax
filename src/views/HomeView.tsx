@@ -194,29 +194,29 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
   );
 
   return (
-    <div className="pb-24 max-w-5xl mx-auto px-4 sm:px-6 space-y-6 sm:space-y-8 pt-3 sm:pt-5">
+    <div className="pb-24 max-w-5xl mx-auto px-3 sm:px-6 space-y-5 sm:space-y-7 pt-3 sm:pt-5 overflow-x-hidden">
       {/* ACTIVE LIVE TOKEN CALLOUT (If customer already ordered) */}
       {activeOrder && (
         <div
           id="active-order-banner"
           onClick={() => navigate(`/order/${activeOrder.id}`)}
-          className="cursor-pointer bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl p-4 text-white shadow-lg shadow-orange-600/20 flex items-center justify-between gap-3 hover:brightness-105 transition-all"
+          className="cursor-pointer bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl p-3.5 sm:p-4 text-white shadow-lg shadow-orange-600/20 flex items-center justify-between gap-2.5 sm:gap-3 hover:brightness-105 transition-all"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-xs flex flex-col items-center justify-center font-black leading-none text-white">
-              <span className="text-[9px] uppercase tracking-wider text-orange-200">Token</span>
-              <span className="text-sm">{activeOrder.tokenNumber}</span>
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/20 backdrop-blur-xs flex flex-col items-center justify-center font-black leading-none text-white flex-shrink-0">
+              <span className="text-[8px] sm:text-[9px] uppercase tracking-wider text-orange-200">Token</span>
+              <span className="text-xs sm:text-sm">{activeOrder.tokenNumber}</span>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase tracking-wider bg-white/25 px-1.5 py-0.5 rounded">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider bg-white/25 px-1.5 py-0.5 rounded flex-shrink-0">
                   {activeOrder.orderStatus}
                 </span>
-                <span className="text-xs text-orange-100 font-semibold truncate max-w-[140px] sm:max-w-[200px]">
+                <span className="text-xs text-orange-100 font-semibold truncate max-w-[120px] xs:max-w-[150px] sm:max-w-[200px]">
                   {activeOrder.shopName}
                 </span>
               </div>
-              <p className="text-xs text-white/95 mt-0.5 font-medium">
+              <p className="text-[11px] sm:text-xs text-white/95 mt-0.5 font-medium line-clamp-1">
                 {activeOrder.orderStatus === 'READY'
                   ? 'Your food is READY at the counter! Tap to collect.'
                   : 'Preparing now. Tap to track live token progress.'}
@@ -229,21 +229,21 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
 
       {/* QUICK HERO & SEARCH BAR */}
       <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-2 mb-1">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight">
                 {isAuthenticated
                   ? `Welcome, ${currentUser?.fullName || currentUser?.name || 'Foodie'}!`
                   : 'Order. Skip the Queue. Collect.'}
               </h1>
               {isAuthenticated && (
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300/60 flex-shrink-0">
                   Verified Account
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+            <p className="text-xs sm:text-sm text-slate-500 font-medium leading-normal">
               {isAuthenticated
                 ? `Showing authentic food stalls near ${activeLocation.area || activeLocation.city}.`
                 : 'Instant counter pickup at verified local food stalls, canteens & snacks counters.'}
@@ -254,7 +254,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           <button
             id="hero-scan-qr-btn"
             onClick={onOpenQRScanner}
-            className="self-start sm:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-95 text-white text-xs font-bold transition-all shadow-sm shadow-orange-600/20"
+            className="self-stretch sm:self-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-95 text-white text-xs font-bold transition-all shadow-sm shadow-orange-600/20 flex-shrink-0"
           >
             <QrCode className="w-4 h-4" />
             <span>Scan Shop / Counter QR</span>
@@ -264,38 +264,40 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
         {/* Search Input Box */}
         <div
           onClick={() => navigate('/search')}
-          className="relative flex items-center bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:border-orange-300 transition-all p-3.5 cursor-pointer group"
+          className="relative flex items-center bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:border-orange-300 transition-all p-3 sm:p-3.5 cursor-pointer group min-w-0"
         >
-          <Search className="w-5 h-5 text-slate-400 group-hover:text-orange-600 transition-colors mr-3" />
-          <span className="text-slate-400 text-sm font-medium">
+          <Search className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-slate-400 group-hover:text-orange-600 transition-colors mr-2.5 sm:mr-3 flex-shrink-0" />
+          <span className="text-slate-400 text-xs sm:text-sm font-medium truncate flex-1 min-w-0">
             Search "Hakka Noodles", "Manchurian", "Vada Pav", "Chai", or stall name...
           </span>
-          <span className="ml-auto hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
+          <span className="ml-2 hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 flex-shrink-0">
             Tap to search
           </span>
         </div>
 
         {/* Real User Location & Proximity Filter Bar with GPS and Naigaon Shortcut */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200/80 rounded-2xl p-3.5 shadow-xs">
+        <div className="flex flex-col gap-2.5 sm:gap-3 bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-3.5 shadow-xs overflow-hidden">
           {/* Active City & GPS */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
-              <MapPin className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Location:
-                </span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200/50">
-                  {activeLocation.city}
-                </span>
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
+                <MapPin className="w-4 h-4" />
               </div>
-              <p className="text-xs font-semibold text-slate-800 truncate">
-                {activeLocation.area}
-              </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Location:
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200/50 truncate max-w-[120px]">
+                    {activeLocation.city}
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-slate-800 truncate">
+                  {activeLocation.area}
+                </p>
+              </div>
             </div>
-            <div className="ml-auto sm:ml-2 flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
                 onClick={handleDetectGPS}
                 disabled={gpsLoading}
@@ -303,11 +305,11 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
                 className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-200 transition-colors flex items-center gap-1"
               >
                 <Navigation className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
-                <span className="hidden md:inline">GPS</span>
+                <span className="text-[11px] font-bold">GPS</span>
               </button>
               <button
                 onClick={() => setIsCityModalOpen(true)}
-                className="text-xs font-bold text-orange-600 hover:text-orange-700 whitespace-nowrap px-2.5 py-1 rounded-lg hover:bg-orange-50 transition-colors border border-orange-200"
+                className="text-[11px] sm:text-xs font-bold text-orange-600 hover:text-orange-700 whitespace-nowrap px-2.5 py-1 rounded-lg hover:bg-orange-50 transition-colors border border-orange-200"
               >
                 Change
               </button>
@@ -315,8 +317,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           </div>
 
           {/* Proximity Range Pills: 5km, 10km, 15km, 50km, All */}
-          <div className="flex items-center gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 overflow-x-auto no-scrollbar">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden lg:inline">
+          <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 overflow-x-auto no-scrollbar w-full min-w-0 py-0.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline flex-shrink-0">
               Range:
             </span>
             {[
@@ -329,7 +331,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
               <button
                 key={item.id}
                 onClick={() => setDistanceFilter(item.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
                   distanceFilter === item.id
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -340,7 +342,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
             ))}
             <button
               onClick={() => setOnlyOpen(!onlyOpen)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
                 onlyOpen
                   ? 'bg-emerald-600 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'

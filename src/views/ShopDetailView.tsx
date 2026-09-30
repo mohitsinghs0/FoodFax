@@ -246,30 +246,30 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
       </div>
 
       {/* Meta Bar */}
-      <div className="bg-white border-b border-slate-200 px-4 sm:px-8 py-3.5 shadow-2xs">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600">
-          <div className="flex items-center gap-4 flex-wrap">
+      <div className="bg-white border-b border-slate-200 px-3 sm:px-8 py-3 sm:py-3.5 shadow-2xs">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap">
             <div className="flex items-center gap-1 font-bold text-slate-800">
               <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
               <span>{shop.rating.toFixed(1)}</span>
               <span className="text-slate-400 font-normal">({shop.totalReviews}+)</span>
             </div>
             <span className="text-slate-300">•</span>
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-slate-400" />
+            <div className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span>Prep: {shop.preparationTimeMinutes} mins</span>
             </div>
             <span className="text-slate-300">•</span>
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-slate-400" />
-              <span className="truncate max-w-xs">{shop.location?.address || shop.address || 'Counter Stall'}</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <span className="truncate max-w-[150px] xs:max-w-xs">{shop.location?.address || shop.address || 'Counter Stall'}</span>
             </div>
           </div>
 
           {shop.contactPhone && (
             <a
               href={`tel:${shop.contactPhone}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold transition-colors w-full sm:w-auto"
             >
               <Phone className="w-3.5 h-3.5 text-orange-500" />
               <span>{shop.contactPhone}</span>
@@ -279,30 +279,30 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
       </div>
 
       {/* Main Content Area */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-8 py-6 space-y-6">
+      <div className="max-w-6xl mx-auto px-3 sm:px-8 py-4 sm:py-6 space-y-5 sm:space-y-6 overflow-x-hidden min-w-0">
         {/* Search & Category Filter */}
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch sm:items-center justify-between">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search items in this menu..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="w-full pl-10 pr-4 py-2 sm:py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             {/* Hands-Free Voice Ordering Button */}
             <button
               onClick={() => setIsVoiceModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black shadow-sm shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer hover:scale-[1.02] active:scale-95"
+              className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black shadow-sm shadow-orange-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
               title="Order items hands-free using your voice"
             >
               <Mic className="w-4 h-4 animate-pulse" />
               <span>Voice Order</span>
-              <span className="text-[10px] uppercase font-bold bg-white/25 px-1.5 py-0.5 rounded-full">
+              <span className="text-[9px] uppercase font-bold bg-white/25 px-1 py-0.5 rounded-full">
                 Hands-Free
               </span>
             </button>
@@ -310,23 +310,23 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
             {/* Veg Toggle */}
             <button
               onClick={() => setOnlyVeg(!onlyVeg)}
-              className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 sm:flex-none px-3 py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 onlyVeg
                   ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
                   : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-600" />
-              Pure Veg Only
+              <span className="w-2 h-2 rounded-full bg-emerald-600 flex-shrink-0" />
+              <span>Pure Veg Only</span>
             </button>
           </div>
         </div>
 
         {/* Category Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 w-full min-w-0 py-0.5">
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${
               selectedCategory === 'all'
                 ? 'bg-orange-500 text-white shadow-xs'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -338,7 +338,7 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${
                 selectedCategory === cat.id
                   ? 'bg-orange-500 text-white shadow-xs'
                   : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -359,7 +359,7 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
           </div>
 
           {filteredItems.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {filteredItems.map((item) => (
                 <MenuItemCard key={item.id} item={item} shop={shop} />
               ))}
@@ -374,19 +374,23 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
         </div>
       </div>
 
-      {/* Floating Hands-Free Voice Order Button */}
+      {/* Floating Hands-Free Voice Order Button (Positioned safely above BottomNav & FloatingCart) */}
       <button
         onClick={() => setIsVoiceModalOpen(true)}
-        className="fixed bottom-20 right-4 sm:right-8 z-30 px-4 py-3 rounded-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white font-black text-xs shadow-xl shadow-orange-600/30 flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-3 ring-white/60 backdrop-blur-xs"
+        className={`fixed right-3 sm:right-8 z-30 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white font-black text-xs shadow-xl shadow-orange-600/30 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-2 sm:ring-3 ring-white/60 backdrop-blur-xs ${
+          cartItems.length > 0
+            ? 'bottom-[calc(9.5rem+env(safe-area-inset-bottom,0px))] md:bottom-24'
+            : 'bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
+        }`}
         aria-label="Order with voice hands-free"
         title="Tap to order hands-free with voice"
       >
-        <span className="relative flex h-3 w-3">
+        <span className="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-white" />
         </span>
-        <Mic className="w-4 h-4 text-white" />
-        <span className="tracking-tight">Voice Order</span>
+        <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+        <span className="tracking-tight text-xs">Voice Order</span>
       </button>
 
       {/* Hands-Free Voice-to-Text Ordering Modal */}

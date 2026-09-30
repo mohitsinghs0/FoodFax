@@ -155,9 +155,9 @@ export const BottomNav: React.FC = () => {
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 safe-area-pb"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/98 backdrop-blur-lg border-t border-slate-200/90 safe-area-pb shadow-lg"
     >
-      <div className="grid grid-cols-5 h-16 max-w-lg mx-auto">
+      <div className="grid grid-cols-5 h-16 max-w-lg mx-auto items-center px-1">
         {customerNavItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -165,7 +165,7 @@ export const BottomNav: React.FC = () => {
               key={item.id}
               id={item.id}
               onClick={() => navigate(item.path)}
-              className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
+              className={`flex flex-col items-center justify-center py-1 transition-colors relative min-h-[48px] active:scale-95 touch-manipulation ${
                 item.isActive
                   ? 'text-orange-600 font-bold'
                   : 'text-slate-500 hover:text-slate-800'
@@ -180,9 +180,9 @@ export const BottomNav: React.FC = () => {
                   <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-orange-600" />
                 )}
               </div>
-              <span className="text-[10px] tracking-tight">{item.name}</span>
+              <span className="text-[10px] font-medium tracking-tight mt-0.5">{item.name}</span>
               {item.isActive && (
-                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-orange-600" />
+                <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-orange-600" />
               )}
             </button>
           );

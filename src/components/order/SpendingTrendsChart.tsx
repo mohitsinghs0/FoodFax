@@ -230,13 +230,13 @@ export const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({ orders
   return (
     <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all">
       {/* Header Bar */}
-      <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-100 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 flex-shrink-0">
-            <TrendingUp className="w-5 h-5" />
+      <div className="p-3.5 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 flex-shrink-0">
+            <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
                 Spending Trends
               </h2>
@@ -244,7 +244,7 @@ export const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({ orders
                 {viewMode === 'monthly' ? 'Monthly Trends' : `Last ${dailyRange} Days`}
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5 truncate">
               {viewMode === 'monthly'
                 ? 'Month-by-month food expenditure and orders'
                 : 'Daily counter order spending breakdown'}
@@ -252,12 +252,12 @@ export const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({ orders
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
           {/* View Mode Toggle: Monthly vs Daily */}
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl text-xs font-bold text-slate-600">
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl text-xs font-bold text-slate-600 flex-1 sm:flex-none">
             <button
               onClick={() => setViewMode('monthly')}
-              className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all ${
+              className={`flex-1 sm:flex-none px-3 py-1 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 viewMode === 'monthly'
                   ? 'bg-orange-600 text-white shadow-xs'
                   : 'hover:text-slate-900'
@@ -268,20 +268,20 @@ export const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({ orders
             </button>
             <button
               onClick={() => setViewMode('daily')}
-              className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-all ${
+              className={`flex-1 sm:flex-none px-3 py-1 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 viewMode === 'daily'
                   ? 'bg-orange-600 text-white shadow-xs'
                   : 'hover:text-slate-900'
               }`}
             >
               <CalendarDays className="w-3 h-3" />
-              <span>Daily (30D)</span>
+              <span>Daily</span>
             </button>
           </div>
 
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors flex-shrink-0"
             aria-label={isExpanded ? 'Collapse chart' : 'Expand chart'}
           >
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -435,7 +435,7 @@ export const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({ orders
 
           {/* Recharts Bar Chart Container */}
           <div className="pt-2">
-            <div className="w-full h-52 sm:h-56">
+            <div className="w-full min-w-0 overflow-hidden h-52 sm:h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={activePoints}
@@ -495,14 +495,14 @@ export const SpendingTrendsChart: React.FC<SpendingTrendsChartProps> = ({ orders
               </ResponsiveContainer>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium px-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium px-2 pt-2 border-t border-slate-100 flex-wrap gap-1">
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-orange-600 inline-block" />
+                <span className="w-2.5 h-2.5 rounded-sm bg-orange-600 inline-block flex-shrink-0" />
                 <span>
                   {viewMode === 'monthly' ? 'Monthly spending records' : 'Days with food orders'}
                 </span>
               </span>
-              <span>Click or hover on bars to inspect details</span>
+              <span className="hidden sm:inline">Click or hover on bars to inspect details</span>
             </div>
           </div>
         </div>

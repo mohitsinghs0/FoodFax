@@ -109,17 +109,17 @@ export const OrdersHistoryView: React.FC = () => {
   }
 
   return (
-    <div className="pb-28 max-w-2xl mx-auto px-4 sm:px-6 pt-3 sm:pt-4 space-y-4 animate-in fade-in duration-200">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+    <div className="pb-28 max-w-2xl mx-auto px-3.5 sm:px-6 pt-3 sm:pt-4 space-y-4 animate-in fade-in duration-200 min-w-0 overflow-x-hidden">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
             Order Tokens & History
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
+          <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
             Real-time status updates, counter tokens & collection receipts
           </p>
         </div>
-        <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+        <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 flex-shrink-0">
           {orders.length} Total
         </span>
       </div>
@@ -131,7 +131,7 @@ export const OrdersHistoryView: React.FC = () => {
       <div 
         role="tablist" 
         aria-label="Order filters"
-        className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl max-w-md overflow-x-auto"
+        className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl max-w-md overflow-x-auto no-scrollbar w-full min-w-0"
       >
         <button
           role="tab"
@@ -224,10 +224,10 @@ export const OrdersHistoryView: React.FC = () => {
                 aria-label={`Order token ${order.tokenNumber} from ${order.shopName}, status ${order.orderStatus}`}
               >
                 {/* Card top */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start justify-between gap-2 sm:gap-3 mb-3">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                     <div
-                      className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none flex-shrink-0 ${
+                      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex flex-col items-center justify-center font-black leading-none flex-shrink-0 ${
                         isReady
                           ? 'bg-emerald-600 text-white shadow-xs'
                           : isActive
@@ -235,19 +235,19 @@ export const OrdersHistoryView: React.FC = () => {
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
-                      <span className="text-[9px] uppercase tracking-wider opacity-80">
+                      <span className="text-[8px] sm:text-[9px] uppercase tracking-wider opacity-80">
                         Token
                       </span>
-                      <span className="text-base font-mono mt-0.5">
+                      <span className="text-sm sm:text-base font-mono mt-0.5">
                         {order.tokenNumber}
                       </span>
                     </div>
 
-                    <div>
-                      <h3 className="font-bold text-base text-slate-900 group-hover:text-orange-600 transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-orange-600 transition-colors truncate">
                         {order.shopName}
                       </h3>
-                      <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 flex items-center gap-1 sm:gap-1.5 flex-wrap">
                         <span>{order.orderType === 'DINE_IN' ? 'Dine-in' : 'Takeaway'}</span>
                         {order.tableNumber && <span>({order.tableNumber})</span>}
                         <span>•</span>
@@ -261,9 +261,9 @@ export const OrdersHistoryView: React.FC = () => {
                         </span>
                       </p>
                       {order.cancellationReason && (
-                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
-                          <Ban className="w-3 h-3 text-red-500" />
-                          <span>Cancelled: {order.cancellationReason}</span>
+                        <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1 truncate">
+                          <Ban className="w-3 h-3 text-red-500 flex-shrink-0" />
+                          <span className="truncate">Cancelled: {order.cancellationReason}</span>
                         </p>
                       )}
                     </div>
@@ -271,7 +271,7 @@ export const OrdersHistoryView: React.FC = () => {
 
                   <div className="text-right flex-shrink-0">
                     <span
-                      className={`inline-block text-[10px] font-extrabold uppercase px-2 py-1 rounded-lg ${
+                      className={`inline-block text-[10px] font-extrabold uppercase px-2 py-1 rounded-lg whitespace-nowrap ${
                         isReady
                           ? 'bg-emerald-600 text-white animate-pulse'
                           : order.orderStatus === 'CANCELLED'
@@ -285,9 +285,9 @@ export const OrdersHistoryView: React.FC = () => {
                           : 'bg-amber-100 text-amber-800'
                       }`}
                     >
-                      {isReady ? '🔔 Ready for Pickup' : order.orderStatus}
+                      {isReady ? '🔔 Ready' : order.orderStatus}
                     </span>
-                    <p className="text-[11px] text-slate-400 font-medium mt-1">
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium mt-1">
                       {new Date(order.createdAt).toLocaleDateString([], {
                         month: 'short',
                         day: 'numeric',
@@ -297,32 +297,32 @@ export const OrdersHistoryView: React.FC = () => {
                 </div>
 
                 {/* Items preview */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                  <span className="truncate max-w-[220px] sm:max-w-xs font-medium">
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 gap-2">
+                  <span className="truncate flex-1 min-w-0 font-medium">
                     {order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
                   </span>
 
                   <div className="flex items-center gap-1 text-orange-600 font-bold group-hover:translate-x-0.5 transition-transform flex-shrink-0">
-                    <span>{isActive ? 'Track Live' : 'View Receipt'}</span>
-                    <ChevronRight className="w-4 h-4" />
+                    <span>{isActive ? 'Track Live' : 'Receipt'}</span>
+                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </div>
                 </div>
 
                 {/* Feedback & Review CTA for Completed Orders */}
                 {order.orderStatus === 'COMPLETED' && (
-                  <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
                     {order.rating ? (
-                      <div className="flex items-center gap-1.5 text-xs text-amber-900 font-bold bg-amber-50/90 px-2 py-0.5 rounded-lg border border-amber-200">
-                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
-                        <span>{order.rating}.0★ Feedback</span>
+                      <div className="flex items-center gap-1.5 text-xs text-amber-900 font-bold bg-amber-50/90 px-2 py-0.5 rounded-lg border border-amber-200 min-w-0 flex-1 truncate">
+                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 flex-shrink-0" />
+                        <span className="flex-shrink-0">{order.rating}.0★</span>
                         {order.reviewText && (
-                          <span className="text-[11px] text-slate-500 font-normal italic truncate max-w-[140px]">
+                          <span className="text-[11px] text-slate-500 font-normal italic truncate">
                             "{order.reviewText}"
                           </span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-slate-400 font-medium">
+                      <span className="text-[11px] text-slate-400 font-medium min-w-0 flex-1 truncate">
                         Rate your experience at {order.shopName}
                       </span>
                     )}
@@ -333,7 +333,7 @@ export const OrdersHistoryView: React.FC = () => {
                         e.stopPropagation();
                         setReviewingOrderId(reviewingOrderId === order.id ? null : order.id);
                       }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 flex-shrink-0"
                     >
                       <Star className="w-3 h-3 text-amber-500" />
                       <span>{order.rating ? 'Edit Review' : 'Rate Stall'}</span>

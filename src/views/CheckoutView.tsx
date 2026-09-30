@@ -111,19 +111,19 @@ export const CheckoutView: React.FC = () => {
   };
 
   return (
-    <div className="py-4 sm:py-6 px-4 sm:px-6 max-w-3xl mx-auto space-y-5 pb-28">
+    <div className="py-4 sm:py-6 px-3 sm:px-6 max-w-3xl mx-auto space-y-4 sm:space-y-5 pb-28 overflow-x-hidden min-w-0">
       {/* Top Header */}
       <div className="flex items-center gap-3">
         <button
           onClick={goBack}
-          className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors"
+          className="p-2 sm:p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors flex-shrink-0"
           aria-label="Go back"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div>
-          <h1 className="text-xl font-black text-slate-900">Checkout & Token Confirmation</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg sm:text-xl font-black text-slate-900 truncate">Checkout & Token Confirmation</h1>
+          <p className="text-xs text-slate-500 mt-0.5 truncate">
             Stall: <strong className="text-slate-800">{shopName}</strong>
           </p>
         </div>
@@ -136,39 +136,39 @@ export const CheckoutView: React.FC = () => {
       )}
 
       {/* Order Type Selection */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-5 shadow-2xs space-y-3">
         <h2 className="font-bold text-sm text-slate-900">1. Select Order Type</h2>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
           <button
             type="button"
             onClick={() => setOrderType('TAKEAWAY')}
-            className={`p-3.5 rounded-xl border-2 text-left transition-all ${
+            className={`p-3 sm:p-3.5 rounded-xl border-2 text-left transition-all min-w-0 ${
               orderType === 'TAKEAWAY'
                 ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-xs'
                 : 'border-slate-200 hover:border-slate-300 text-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <ShoppingBag className={`w-4 h-4 ${orderType === 'TAKEAWAY' ? 'text-orange-600' : 'text-slate-500'}`} />
-              <span className="font-bold text-sm">Takeaway / Parcel</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 min-w-0">
+              <ShoppingBag className={`w-4 h-4 flex-shrink-0 ${orderType === 'TAKEAWAY' ? 'text-orange-600' : 'text-slate-500'}`} />
+              <span className="font-bold text-xs sm:text-sm truncate">Takeaway / Parcel</span>
             </div>
-            <p className="text-[11px] text-slate-500">Pick up at stall counter when ready</p>
+            <p className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">Pick up at counter when ready</p>
           </button>
 
           <button
             type="button"
             onClick={() => setOrderType('DINE_IN')}
-            className={`p-3.5 rounded-xl border-2 text-left transition-all ${
+            className={`p-3 sm:p-3.5 rounded-xl border-2 text-left transition-all min-w-0 ${
               orderType === 'DINE_IN'
                 ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-xs'
                 : 'border-slate-200 hover:border-slate-300 text-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <Utensils className={`w-4 h-4 ${orderType === 'DINE_IN' ? 'text-orange-600' : 'text-slate-500'}`} />
-              <span className="font-bold text-sm">Dine-in Table</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 min-w-0">
+              <Utensils className={`w-4 h-4 flex-shrink-0 ${orderType === 'DINE_IN' ? 'text-orange-600' : 'text-slate-500'}`} />
+              <span className="font-bold text-xs sm:text-sm truncate">Dine-in Table</span>
             </div>
-            <p className="text-[11px] text-slate-500">Served right to your table or counter bar</p>
+            <p className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">Served right to your table</p>
           </button>
         </div>
 
@@ -229,39 +229,39 @@ export const CheckoutView: React.FC = () => {
       </div>
 
       {/* Payment Method */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-5 shadow-2xs space-y-3">
         <h2 className="font-bold text-sm text-slate-900">3. Payment Preference</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
           <button
             type="button"
             onClick={() => setPaymentMethod('CASH_AT_COUNTER')}
-            className={`p-3.5 rounded-xl border-2 text-left transition-all ${
+            className={`p-3 sm:p-3.5 rounded-xl border-2 text-left transition-all min-w-0 ${
               paymentMethod === 'CASH_AT_COUNTER'
                 ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-xs'
                 : 'border-slate-200 hover:border-slate-300 text-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <Banknote className="w-4 h-4 text-emerald-600" />
-              <span className="font-bold text-sm">Pay Cash at Counter</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 min-w-0">
+              <Banknote className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="font-bold text-xs sm:text-sm truncate">Cash at Counter</span>
             </div>
-            <p className="text-[11px] text-slate-500">Pay when your token is called</p>
+            <p className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">Pay when token called</p>
           </button>
 
           <button
             type="button"
             onClick={() => setPaymentMethod('PAY_ONLINE')}
-            className={`p-3.5 rounded-xl border-2 text-left transition-all ${
+            className={`p-3 sm:p-3.5 rounded-xl border-2 text-left transition-all min-w-0 ${
               paymentMethod === 'PAY_ONLINE'
                 ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-xs'
                 : 'border-slate-200 hover:border-slate-300 text-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <QrCode className="w-4 h-4 text-blue-600" />
-              <span className="font-bold text-sm">UPI / Online Pay</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 min-w-0">
+              <QrCode className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <span className="font-bold text-xs sm:text-sm truncate">UPI / Online Pay</span>
             </div>
-            <p className="text-[11px] text-slate-500">Scan Stall QR or Google Pay / PhonePe</p>
+            <p className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">GPay / PhonePe / QR</p>
           </button>
         </div>
       </div>

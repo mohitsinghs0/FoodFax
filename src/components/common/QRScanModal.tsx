@@ -152,13 +152,13 @@ export const QRScanModal: React.FC<QRScanModalProps> = ({ isOpen, onClose }) => 
                 onClick={() => handleScanShop(shop.slug)}
                 className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-orange-300 hover:bg-orange-50/50 transition-all flex items-center justify-between group"
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <img
                     src={shop.image?.trim() ? shop.image : DEFAULT_SHOP_IMG}
                     alt={shop.name}
                     className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                   />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <h4 className="font-bold text-xs text-slate-900 group-hover:text-orange-600 truncate">
                         {shop.name}
@@ -174,7 +174,7 @@ export const QRScanModal: React.FC<QRScanModalProps> = ({ isOpen, onClose }) => 
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 text-slate-400 group-hover:text-orange-600 pl-2">
+                <div className="flex items-center gap-1 text-slate-400 group-hover:text-orange-600 pl-2 flex-shrink-0">
                   <span className="text-[10px] font-bold">Scan</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </div>
@@ -185,20 +185,20 @@ export const QRScanModal: React.FC<QRScanModalProps> = ({ isOpen, onClose }) => 
             <div className="pt-2 border-t border-slate-100">
               <button
                 onClick={() => handleScanShop('college-canteen', 'Table 14')}
-                className="w-full p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left flex items-center justify-between transition-colors"
+                className="w-full p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left flex items-center justify-between transition-colors gap-2"
               >
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-orange-600" />
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Sparkles className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-800 truncate">
                       Scan College Canteen Table #14 QR
                     </p>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="text-[10px] text-slate-500 truncate">
                       Pre-fills Dine-in Table 14 for instant ordering
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
               </button>
             </div>
           </div>
@@ -215,20 +215,20 @@ export const QRScanModal: React.FC<QRScanModalProps> = ({ isOpen, onClose }) => 
               <button
                 key={shop.id}
                 onClick={() => handleScanShop(shop.slug)}
-                className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-orange-300 hover:bg-orange-50/50 transition-all flex items-center justify-between group"
+                className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-orange-300 hover:bg-orange-50/50 transition-all flex items-center justify-between group gap-2"
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <img
                     src={shop.image?.trim() ? shop.image : DEFAULT_SHOP_IMG}
                     alt={shop.name}
                     className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                   />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <h4 className="font-bold text-xs text-slate-900 group-hover:text-orange-600 truncate">
                         {shop.name}
                       </h4>
-                      <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
+                      <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 flex-shrink-0">
                         {Math.round(shop.location?.distanceKm || 100)} km away
                       </span>
                     </div>
@@ -237,7 +237,7 @@ export const QRScanModal: React.FC<QRScanModalProps> = ({ isOpen, onClose }) => 
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 text-slate-400 group-hover:text-orange-600 pl-2">
+                <div className="flex items-center gap-1 text-slate-400 group-hover:text-orange-600 pl-2 flex-shrink-0">
                   <span className="text-[10px] font-bold">Open Menu</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </div>

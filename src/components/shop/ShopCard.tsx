@@ -52,10 +52,10 @@ export const ShopCard: React.FC<ShopCardProps> = ({
     return (
       <div
         onClick={handleCardClick}
-        className="group relative bg-white rounded-2xl border border-slate-200/90 hover:border-orange-300 hover:shadow-md transition-all p-3.5 flex gap-3.5 cursor-pointer"
+        className="group relative bg-white rounded-2xl border border-slate-200/90 hover:border-orange-300 hover:shadow-md transition-all p-3 sm:p-3.5 flex gap-3 sm:gap-3.5 cursor-pointer overflow-hidden min-w-0"
       >
         {/* Stall Thumbnail */}
-        <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
+        <div className="relative w-20 h-20 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
           <img
             src={shop.image?.trim() ? shop.image : DEFAULT_SHOP_IMG}
             alt={shop.name}
@@ -75,7 +75,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
         <div className="flex-1 min-w-0 flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between gap-1.5">
-              <div>
+              <div className="min-w-0 flex-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/50">
                   {shop.stallType}
                 </span>
@@ -85,7 +85,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
               </div>
               <button
                 onClick={handleHeartClick}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors flex-shrink-0"
                 aria-label={isSaved ? 'Remove from saved' : 'Save stall'}
               >
                 <Heart
@@ -101,21 +101,21 @@ export const ShopCard: React.FC<ShopCardProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center flex-wrap gap-2 text-xs text-slate-600 mt-2">
-            <div className="flex items-center gap-1 font-semibold text-slate-900">
+          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 mt-2 min-w-0">
+            <div className="flex items-center gap-1 font-semibold text-slate-900 flex-shrink-0">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
               <span>{shop.rating}</span>
-              <span className="text-slate-400 text-[11px]">({shop.totalReviews})</span>
+              <span className="text-slate-400 text-[10px] sm:text-[11px]">({shop.totalReviews})</span>
             </div>
-            <span className="w-1 h-1 rounded-full bg-slate-300" />
-            <div className="flex items-center gap-1 font-medium text-slate-600">
+            <span className="w-1 h-1 rounded-full bg-slate-300 flex-shrink-0" />
+            <div className="flex items-center gap-1 font-medium text-slate-600 flex-shrink-0">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span>{shop.preparationTimeMinutes} min</span>
+              <span>{shop.preparationTimeMinutes}m</span>
             </div>
-            <span className="w-1 h-1 rounded-full bg-slate-300" />
-            <div className="flex items-center gap-1 font-medium text-slate-600">
-              <MapPin className="w-3.5 h-3.5 text-slate-400" />
-              <span>{formatDistance(shop.location?.distanceKm)}</span>
+            <span className="w-1 h-1 rounded-full bg-slate-300 flex-shrink-0" />
+            <div className="flex items-center gap-1 font-medium text-slate-600 min-w-0 truncate">
+              <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <span className="truncate">{formatDistance(shop.location?.distanceKm)}</span>
             </div>
           </div>
         </div>
@@ -126,7 +126,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
   return (
     <div
       onClick={handleCardClick}
-      className="group relative bg-white rounded-2xl border border-slate-200/90 hover:border-orange-300 hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer flex flex-col h-full"
+      className="group relative bg-white rounded-2xl border border-slate-200/90 hover:border-orange-300 hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer flex flex-col h-full min-w-0"
     >
       {/* Stall Hero Image */}
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100">
@@ -184,10 +184,10 @@ export const ShopCard: React.FC<ShopCardProps> = ({
       </div>
 
       {/* Card Body */}
-      <div className="p-4 flex-1 flex flex-col justify-between">
+      <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between min-w-0">
         <div>
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-bold text-base text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-1">
+            <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-1 flex-1 min-w-0">
               {shop.name}
             </h3>
             <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded text-amber-900 text-xs font-bold flex-shrink-0 border border-amber-200/50">
@@ -200,19 +200,19 @@ export const ShopCard: React.FC<ShopCardProps> = ({
             {shop.tagline}
           </p>
 
-          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-2">
+          <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-2 min-w-0">
             <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
-            <span className="truncate">{shop.location?.landmark || shop.address || shop.area || shop.stallType}</span>
-            <span>•</span>
-            <span className="font-semibold text-slate-600">{formatDistance(shop.location?.distanceKm)}</span>
-          </p>
+            <span className="truncate flex-1 min-w-0">{shop.location?.landmark || shop.address || shop.area || shop.stallType}</span>
+            <span className="flex-shrink-0">•</span>
+            <span className="font-semibold text-slate-600 flex-shrink-0">{formatDistance(shop.location?.distanceKm)}</span>
+          </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-slate-500">
+        <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-slate-500 truncate mr-2">
             {shop.isPureVeg ? '🟢 Pure Veg Stall' : 'Veg & Snacks'}
           </span>
-          <span className="text-xs font-bold text-orange-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+          <span className="text-xs font-bold text-orange-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 flex-shrink-0">
             View Menu →
           </span>
         </div>
