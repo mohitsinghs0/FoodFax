@@ -6,6 +6,7 @@ import { orderService } from '../services/orderService';
 import { INDIAN_CITIES, CityPreset, getBrowserLocation, DEFAULT_CUSTOMER_LOCATION } from '../services/geoService';
 import { Shop, ShopCategory, Order } from '../types';
 import { ShopCard } from '../components/shop/ShopCard';
+import { NearbyFoodRadar } from '../components/discovery/NearbyFoodRadar';
 import { 
   Search, 
   QrCode, 
@@ -17,6 +18,9 @@ import {
   Receipt,
   Heart,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Compass,
   MapPin,
   SlidersHorizontal,
   Navigation,
@@ -43,30 +47,48 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
   const [categories, setCategories] = useState<ShopCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   
-  // Real users default to 50km if regional shops exist, or 15km
-  const [distanceFilter, setDistanceFilter] = useState<'5km' | '10km' | '15km' | '50km' | 'all' | '100km+'>('50km');
+  const [distanceFilter, setDistanceFilter] = useState<'5km' | '10km' | '15km' | '50km' | 'all' | '100km+'>('all');
+  const [isRadarExpanded, setIsRadarExpanded] = useState<boolean>(false);
   const [onlyOpen, setOnlyOpen] = useState<boolean>(false);
   const [shops, setShops] = useState<Shop[]>([]);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [savedShopIds, setSavedShopIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active location state (defaults to user's saved location or Mumbai preset)
+  // Active location state (checks localStorage, user profile, or Naigaon East default)
   const [activeLocation, setActiveLocation] = useState<{
     latitude: number;
     longitude: number;
     area: string;
     city: string;
-  }>({
-    latitude: currentUser?.latitude || DEFAULT_CUSTOMER_LOCATION.latitude,
-    longitude: currentUser?.longitude || DEFAULT_CUSTOMER_LOCATION.longitude,
-    area: currentUser?.area || DEFAULT_CUSTOMER_LOCATION.area,
-    city: currentUser?.city || DEFAULT_CUSTOMER_LOCATION.city,
+  }>(() => {
+    try {
+      const saved = localStorage.getItem('foodfax_active_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.latitude && parsed.longitude && !parsed.area?.includes('Andheri')) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return {
+      latitude: currentUser?.latitude || DEFAULT_CUSTOMER_LOCATION.latitude,
+      longitude: currentUser?.longitude || DEFAULT_CUSTOMER_LOCATION.longitude,
+      area: currentUser?.area && !currentUser.area.includes('Andheri') ? currentUser.area : DEFAULT_CUSTOMER_LOCATION.area,
+      city: currentUser?.city && !currentUser.city.includes('Andheri') ? currentUser.city : DEFAULT_CUSTOMER_LOCATION.city,
+    };
   });
 
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
+
+  // Persist active location to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('foodfax_active_location', JSON.stringify(activeLocation));
+    } catch {}
+  }, [activeLocation]);
 
   // Reload shops whenever active location changes & subscribe to real-time shop deletions/updates
   useEffect(() => {
@@ -140,14 +162,39 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
     setGpsMessage(null);
     try {
       const coords = await getBrowserLocation();
-      setActiveLocation({
+      let areaName = 'Current Location';
+      let cityName = 'Detected Area';
+
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=16&addressdetails=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const addr = data.address || {};
+          areaName =
+            addr.suburb ||
+            addr.neighbourhood ||
+            addr.road ||
+            addr.residential ||
+            addr.village ||
+            data.name ||
+            'Detected Location';
+          cityName = addr.city || addr.town || addr.county || addr.state_district || 'Local Area';
+        }
+      } catch (err) {
+        console.warn('Reverse geocode fallback:', err);
+      }
+
+      const newLoc = {
         latitude: coords.latitude,
         longitude: coords.longitude,
-        area: 'Current GPS Location',
-        city: 'Detected Device GPS',
-      });
-      setDistanceFilter('50km');
-      setGpsMessage('Location detected via GPS!');
+        area: areaName,
+        city: cityName,
+      };
+      setActiveLocation(newLoc);
+      setGpsMessage(`Location set to ${areaName}, ${cityName}`);
       setTimeout(() => {
         setIsCityModalOpen(false);
         setGpsMessage(null);
@@ -313,44 +360,41 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
               >
                 Change
               </button>
+              <button
+                onClick={() => setIsRadarExpanded(!isRadarExpanded)}
+                className={`text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 border ${
+                  isRadarExpanded
+                    ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                    : 'text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 border-orange-200'
+                }`}
+                title={isRadarExpanded ? 'Hide Radar Map' : 'Explore Nearby Food Discovery & Distance Radar Map'}
+                aria-expanded={isRadarExpanded}
+              >
+                <Compass className={`w-3.5 h-3.5 ${isRadarExpanded ? 'animate-spin' : ''}`} style={isRadarExpanded ? { animationDuration: '6s' } : undefined} />
+                <span>{isRadarExpanded ? 'Hide Map' : 'Radar Map'}</span>
+                {isRadarExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
             </div>
           </div>
 
-          {/* Proximity Range Pills: 5km, 10km, 15km, 50km, All */}
-          <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 overflow-x-auto no-scrollbar w-full min-w-0 py-0.5">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline flex-shrink-0">
-              Range:
-            </span>
-            {[
-              { id: '5km', label: '< 5 km' },
-              { id: '10km', label: '10 km' },
-              { id: '15km', label: '15 km' },
-              { id: '50km', label: '50 km' },
-              { id: 'all', label: 'All Range' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setDistanceFilter(item.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
-                  distanceFilter === item.id
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-            <button
-              onClick={() => setOnlyOpen(!onlyOpen)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
-                onlyOpen
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Open Now
-            </button>
-          </div>
+          {/* Expandable Nearby Food Discovery & Distance Radar Map */}
+          {isRadarExpanded && (
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 animate-in fade-in duration-200">
+              <NearbyFoodRadar
+                embedded={true}
+                initialLocation={activeLocation}
+                onLocationChange={(loc) => {
+                  setActiveLocation((prev) => ({
+                    ...prev,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    city: loc.city || prev.city,
+                    area: loc.area || prev.area,
+                  }));
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 

@@ -161,13 +161,13 @@ export function formatDistance(distanceKm: number): string {
 }
 
 /**
- * Default fallback coordinates: Mumbai - Andheri West Station (Hub of stalls)
+ * Default fallback coordinates: Naigaon East / Vasai (MMR)
  */
 export const DEFAULT_CUSTOMER_LOCATION: GeoPoint & { area: string; city: string } = {
-  latitude: 19.1197,
-  longitude: 72.8464,
-  area: 'Andheri West Station',
-  city: 'Mumbai',
+  latitude: 19.3515,
+  longitude: 72.8525,
+  area: 'Naigaon East',
+  city: 'Naigaon / Vasai (MMR)',
 };
 
 /**
