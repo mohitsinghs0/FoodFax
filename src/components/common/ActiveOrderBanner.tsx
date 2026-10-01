@@ -37,7 +37,11 @@ export const ActiveOrderBanner: React.FC = () => {
   const isOwner = currentUser?.role === 'owner';
 
   useEffect(() => {
-    if (isOwner) return;
+    if (!currentUser || isOwner) {
+      setActiveOrder(null);
+      setUnreviewedCompletedOrder(null);
+      return;
+    }
 
     let unsub: (() => void) | undefined;
 

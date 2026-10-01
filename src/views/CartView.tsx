@@ -1,5 +1,6 @@
 import React from 'react';
 import { useRouter } from '../context/RouterContext';
+import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { VegBadge } from '../components/common/VegBadge';
 import { 
@@ -16,6 +17,7 @@ import {
 
 export const CartView: React.FC = () => {
   const { navigate, goBack } = useRouter();
+  const { currentUser, isAuthenticated } = useAuth();
   const { items, shopId, shopName, shopImage, subtotal, updateQuantity, removeItem, clearCart } = useCart();
 
   if (items.length === 0) {
@@ -150,7 +152,16 @@ export const CartView: React.FC = () => {
       {/* Checkout CTA */}
       <div className="pt-2">
         <button
-          onClick={() => navigate('/checkout')}
+          onClick={() => {
+            if (!isAuthenticated && !currentUser) {
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('foodfax_post_login_redirect', '/checkout');
+              }
+              navigate('/login?redirect=/checkout');
+              return;
+            }
+            navigate('/checkout');
+          }}
           className="w-full py-3.5 px-6 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-sm shadow-md shadow-orange-500/20 flex items-center justify-between transition-all"
         >
           <div className="text-left">

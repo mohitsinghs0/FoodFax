@@ -49,16 +49,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
   };
 
   return (
-    <header className={`sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b ${highContrast ? 'border-b-2 border-black' : 'border-slate-200'}`}>
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 h-15 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
-        {/* Logo & Slogan */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <button
-            id="brand-home-link"
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 group text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 rounded-xl"
-            aria-label="FoodFax Home - Counter Orders"
-          >
+    <>
+      <header
+        className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs safe-area-pt transition-colors"
+      >
+        <div className="max-w-5xl mx-auto px-3 sm:px-6 h-15 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
+          {/* Logo & Slogan */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              id="brand-home-link"
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 group text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-600 rounded-xl"
+              aria-label="FoodFax Home - Counter Orders"
+            >
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-sm shadow-orange-500/25 group-hover:scale-105 transition-transform flex-shrink-0">
               <span className="tracking-tighter">FF</span>
             </div>
@@ -341,5 +344,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
         </div>
       </div>
     </header>
+    {/* Spacer so page content starts cleanly below the fixed header */}
+    <div className="h-15 sm:h-16 w-full shrink-0 pointer-events-none" aria-hidden="true" />
+  </>
   );
 };

@@ -20,8 +20,11 @@ export const BottomNav: React.FC = () => {
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
 
   useEffect(() => {
-    // Only poll active customer orders if customer or unauthenticated
-    if (currentUser?.role === 'owner') return;
+    // Only poll active customer orders if logged-in customer
+    if (!currentUser || currentUser?.role === 'owner') {
+      setHasActiveOrder(false);
+      return;
+    }
 
     const checkActiveOrders = async () => {
       const orders = await orderService.getCustomerOrders(currentUser?.id);
@@ -83,7 +86,7 @@ export const BottomNav: React.FC = () => {
     return (
       <nav
         aria-label="Owner Mobile Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/98 backdrop-blur-md border-t border-slate-800 text-white safe-area-pb shadow-lg"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/98 dark:bg-slate-900/98 backdrop-blur-lg border-t border-slate-200/90 dark:border-slate-800 text-slate-800 dark:text-white safe-area-pb shadow-lg"
       >
         <div className="grid grid-cols-5 h-16 max-w-lg mx-auto">
           {ownerNavItems.map((item) => {
@@ -95,8 +98,8 @@ export const BottomNav: React.FC = () => {
                 onClick={() => navigate(item.path)}
                 className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
                   item.isActive
-                    ? 'text-orange-400 font-bold'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'text-orange-600 dark:text-orange-400 font-bold'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
                 <Icon className={`w-5 h-5 ${item.isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />

@@ -78,12 +78,12 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
       const saved = localStorage.getItem(PREFS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.themeMode) return parsed.themeMode;
+        if (parsed.themeMode === 'dark') return 'dark';
       }
     } catch {
       // fallback
     }
-    return 'system';
+    return 'light';
   });
 
   // High contrast mode (automatically defaults to true if system high-contrast is active)
@@ -193,9 +193,8 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // Compute active dark mode based on themeMode + systemDetected
-  const isDarkMode =
-    themeMode === 'dark' || (themeMode === 'system' && systemDetected.darkMode);
+  // Compute active dark mode based on user's theme selection (defaults to light)
+  const isDarkMode = themeMode === 'dark';
 
   // 2. Persist preferences to localStorage
   useEffect(() => {

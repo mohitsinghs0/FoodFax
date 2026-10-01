@@ -105,11 +105,15 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           },
           isRealUser
         ),
-        orderService.getCustomerOrders(currentUser?.id),
+        currentUser?.id ? orderService.getCustomerOrders(currentUser.id) : Promise.resolve([]),
       ]);
       setCategories(cats);
       setShops(allShops);
-      setRecentOrders(orders.filter((o) => !o.isDemo && !o.id.startsWith('ord-100')).slice(0, 3));
+      setRecentOrders(
+        currentUser
+          ? orders.filter((o) => !o.isDemo && !o.id.startsWith('ord-100')).slice(0, 3)
+          : []
+      );
       setSavedShopIds(shopService.getSavedShopIds());
       setLoading(false);
     };
@@ -243,7 +247,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
   return (
     <div className="pb-24 max-w-5xl mx-auto px-3 sm:px-6 space-y-5 sm:space-y-7 pt-3 sm:pt-5 overflow-x-hidden">
       {/* ACTIVE LIVE TOKEN CALLOUT (If customer already ordered) */}
-      {activeOrder && (
+      {currentUser && activeOrder && (
         <div
           id="active-order-banner"
           onClick={() => navigate(`/order/${activeOrder.id}`)}
@@ -323,11 +327,12 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
         </div>
 
         {/* Real User Location & Proximity Filter Bar with GPS and Naigaon Shortcut */}
-        <div className="flex flex-col gap-2.5 sm:gap-3 bg-white border border-slate-200/80 rounded-2xl p-3 sm:p-3.5 shadow-xs overflow-hidden">
-          {/* Active City & GPS */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 shadow-xs overflow-hidden transition-colors">
+          {/* Main Location Info Row */}
           <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0">
+            {/* Left: Icon + City/Area Info */}
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0 border border-orange-200/60">
                 <MapPin className="w-4 h-4" />
               </div>
               <div className="min-w-0 flex-1">
@@ -335,46 +340,51 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
                   <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     Location:
                   </span>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200/50 truncate max-w-[120px]">
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 truncate max-w-[130px]">
                     {activeLocation.city}
                   </span>
                 </div>
-                <p className="text-xs font-semibold text-slate-800 truncate">
+                <p className="text-xs sm:text-sm font-bold text-slate-800 truncate mt-0.5" title={activeLocation.area}>
                   {activeLocation.area}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
-                onClick={handleDetectGPS}
-                disabled={gpsLoading}
-                title="Detect GPS"
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-200 transition-colors flex items-center gap-1"
-              >
-                <Navigation className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
-                <span className="text-[11px] font-bold">GPS</span>
-              </button>
-              <button
-                onClick={() => setIsCityModalOpen(true)}
-                className="text-[11px] sm:text-xs font-bold text-orange-600 hover:text-orange-700 whitespace-nowrap px-2.5 py-1 rounded-lg hover:bg-orange-50 transition-colors border border-orange-200"
-              >
-                Change
-              </button>
-              <button
-                onClick={() => setIsRadarExpanded(!isRadarExpanded)}
-                className={`text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 border ${
-                  isRadarExpanded
-                    ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
-                    : 'text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 border-orange-200'
-                }`}
-                title={isRadarExpanded ? 'Hide Radar Map' : 'Explore Nearby Food Discovery & Distance Radar Map'}
-                aria-expanded={isRadarExpanded}
-              >
-                <Compass className={`w-3.5 h-3.5 ${isRadarExpanded ? 'animate-spin' : ''}`} style={isRadarExpanded ? { animationDuration: '6s' } : undefined} />
-                <span>{isRadarExpanded ? 'Hide Map' : 'Radar Map'}</span>
-                {isRadarExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+
+            {/* Quick GPS Button */}
+            <button
+              onClick={handleDetectGPS}
+              disabled={gpsLoading}
+              title="Detect GPS location"
+              className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-xl border border-emerald-200 transition-all flex items-center gap-1.5 flex-shrink-0 active:scale-95 touch-manipulation"
+            >
+              <Navigation className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
+              <span className="text-[11px] font-bold">GPS</span>
+            </button>
+          </div>
+
+          {/* Action Buttons Row: Change Area & Radar Map */}
+          <div className="grid grid-cols-2 gap-2 pt-2.5 mt-2.5 border-t border-slate-100">
+            <button
+              onClick={() => setIsCityModalOpen(true)}
+              className="text-xs font-bold text-slate-700 hover:text-orange-600 bg-slate-50 hover:bg-orange-50/70 py-2 px-3 rounded-xl transition-all border border-slate-200 hover:border-orange-200 flex items-center justify-center gap-1.5 active:scale-98"
+            >
+              <span>Change Area</span>
+            </button>
+
+            <button
+              onClick={() => setIsRadarExpanded(!isRadarExpanded)}
+              className={`text-xs font-bold py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 border active:scale-98 ${
+                isRadarExpanded
+                  ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                  : 'text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 border-orange-200'
+              }`}
+              title={isRadarExpanded ? 'Hide Radar Map' : 'Explore Nearby Food Discovery & Distance Radar Map'}
+              aria-expanded={isRadarExpanded}
+            >
+              <Compass className={`w-3.5 h-3.5 ${isRadarExpanded ? 'animate-spin' : ''}`} style={isRadarExpanded ? { animationDuration: '6s' } : undefined} />
+              <span>{isRadarExpanded ? 'Hide Map' : 'Radar Map'}</span>
+              {isRadarExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
           </div>
 
           {/* Expandable Nearby Food Discovery & Distance Radar Map */}
@@ -424,7 +434,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${
                   isSelected
-                    ? 'bg-slate-900 text-white shadow-sm'
+                    ? 'bg-orange-600 text-white shadow-sm shadow-orange-600/20'
                     : 'bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
@@ -547,7 +557,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
               <button
                 onClick={handleDetectGPS}
                 disabled={gpsLoading}
-                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
               >
                 <Navigation className={`w-3.5 h-3.5 ${gpsLoading ? 'animate-spin' : ''}`} />
                 <span>Use My Exact GPS</span>
@@ -617,7 +627,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
       )}
 
       {/* RECENT COUNTER ORDERS SECTION */}
-      {selectedCategory === 'all' && recentOrders.length > 0 && (
+      {currentUser && selectedCategory === 'all' && recentOrders.length > 0 && (
         <section className="space-y-3 pt-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

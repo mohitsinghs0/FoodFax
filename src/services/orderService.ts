@@ -72,8 +72,7 @@ export const orderService = {
     }
 
     if (!effectiveCustomerId) {
-      const local = this.getStoredOrders().filter((o) => !o.isDemo && !MOCK_ORDER_IDS.has(o.id));
-      return local;
+      return [];
     }
 
     // Fetch from remote & merge with local non-demo orders

@@ -1093,8 +1093,8 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
             onClick={() => setSelectedServiceType('all')}
             className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl transition-all whitespace-nowrap ${
               selectedServiceType === 'all'
-                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80'
+                ? 'bg-orange-600 text-white shadow-xs border border-orange-600'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
             }`}
           >
             All Spots
@@ -1104,8 +1104,8 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
             onClick={() => setSelectedServiceType('dine_in')}
             className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1 ${
               selectedServiceType === 'dine_in'
-                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80'
+                ? 'bg-orange-600 text-white shadow-xs border border-orange-600'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
             }`}
           >
             <UtensilsCrossed className="w-3 h-3 text-orange-500" />
@@ -1116,8 +1116,8 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
             onClick={() => setSelectedServiceType('takeaway')}
             className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1 ${
               selectedServiceType === 'takeaway'
-                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80'
+                ? 'bg-orange-600 text-white shadow-xs border border-orange-600'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
             }`}
           >
             <ShoppingBag className="w-3 h-3 text-amber-500" />
@@ -1128,8 +1128,8 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
             onClick={() => setSelectedServiceType('delivery')}
             className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1 ${
               selectedServiceType === 'delivery'
-                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80'
+                ? 'bg-orange-600 text-white shadow-xs border border-orange-600'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
             }`}
           >
             <Bike className="w-3 h-3 text-blue-500" />

@@ -17,7 +17,12 @@ import {
 export const RegisterView: React.FC = () => {
   const { route, navigate } = useRouter();
   const { registerCustomer } = useAuth();
-  const redirectPath = route.params?.redirect || '/';
+  const rawRedirect =
+    route.params?.redirect ||
+    (typeof window !== 'undefined'
+      ? sessionStorage.getItem('foodfax_post_login_redirect')
+      : null);
+  const redirectPath = rawRedirect ? decodeURIComponent(rawRedirect) : '/';
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -43,7 +48,14 @@ export const RegisterView: React.FC = () => {
         email: email.trim() || undefined,
         password: password.trim(),
       });
-      navigate(redirectPath && redirectPath !== '/business' ? redirectPath : '/complete-profile');
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('foodfax_post_login_redirect');
+      }
+      navigate(
+        redirectPath && redirectPath !== '/business' && redirectPath !== '/'
+          ? redirectPath
+          : '/complete-profile'
+      );
     } catch (err: any) {
       console.warn('[RegisterView] Registration note:', err?.message);
       setError(err?.message || 'Registration failed. Please try again.');

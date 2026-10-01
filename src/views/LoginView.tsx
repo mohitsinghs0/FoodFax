@@ -20,7 +20,12 @@ import {
 export const LoginView: React.FC = () => {
   const { route, navigate } = useRouter();
   const { login, resetPassword, signInWithGoogle } = useAuth();
-  const redirectPath = route.params?.redirect || '/';
+  const rawRedirect =
+    route.params?.redirect ||
+    (typeof window !== 'undefined'
+      ? sessionStorage.getItem('foodfax_post_login_redirect')
+      : null);
+  const redirectPath = rawRedirect ? decodeURIComponent(rawRedirect) : '/';
 
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +57,9 @@ export const LoginView: React.FC = () => {
     setError(null);
     try {
       const loggedUser = await login(emailOrPhone.trim(), password.trim());
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('foodfax_post_login_redirect');
+      }
       if (loggedUser.role === 'owner') {
         navigate('/business');
       } else {

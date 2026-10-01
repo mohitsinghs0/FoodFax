@@ -20,18 +20,37 @@ import {
 
 export const CheckoutView: React.FC = () => {
   const { navigate, goBack } = useRouter();
-  const { currentUser, isAuthenticated } = useAuth();
+  const { currentUser, isAuthenticated, isLoading } = useAuth();
   const { items, shopId, shopName, shopImage, subtotal, clearCart, commitOrderAndClearCart } = useCart();
 
   const [orderType, setOrderType] = useState<OrderType>('TAKEAWAY');
   const [tableNumber, setTableNumber] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH_AT_COUNTER');
   const [instructions, setInstructions] = useState('');
-  const [customerName, setCustomerName] = useState(currentUser?.fullName || currentUser?.name || 'Guest Customer');
-  const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '+91 98765 43210');
+  const [customerName, setCustomerName] = useState(currentUser?.fullName || currentUser?.name || '');
+  const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [shopDetails, setShopDetails] = useState<Shop | null>(null);
+
+  // Guard: if unauthenticated, redirect to login with return to /checkout
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && !currentUser) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('foodfax_post_login_redirect', '/checkout');
+      }
+      navigate('/login?redirect=/checkout');
+    }
+  }, [isLoading, isAuthenticated, currentUser, navigate]);
+
+  // Synchronize customer profile info when logged in user is loaded
+  useEffect(() => {
+    if (currentUser) {
+      const name = currentUser.fullName || currentUser.name;
+      if (name) setCustomerName(name);
+      if (currentUser.phone) setCustomerPhone(currentUser.phone);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (shopId) {
@@ -40,6 +59,15 @@ export const CheckoutView: React.FC = () => {
       });
     }
   }, [shopId]);
+
+  if (isLoading && !currentUser) {
+    return (
+      <div className="py-20 px-4 max-w-md mx-auto text-center">
+        <div className="w-10 h-10 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-xs font-semibold text-slate-500">Checking your account...</p>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -59,6 +87,14 @@ export const CheckoutView: React.FC = () => {
   const grandTotal = subtotal;
 
   const handlePlaceOrder = async () => {
+    if (!isAuthenticated || !currentUser) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('foodfax_post_login_redirect', '/checkout');
+      }
+      navigate('/login?redirect=/checkout');
+      return;
+    }
+
     if (!shopId) return;
     if (orderType === 'DINE_IN' && !tableNumber.trim()) {
       setErrorMessage('Please enter your table number for Dine-In orders.');
@@ -87,9 +123,9 @@ export const CheckoutView: React.FC = () => {
         shopName: shopName || 'Food Stall',
         shopImage: shopImage || undefined,
         shopLocation: shopDetails?.location?.address || shopDetails?.location?.landmark || 'Counter Stall',
-        customerId: currentUser?.id || `cust-${Date.now().toString().slice(-6)}`,
-        customerName: customerName.trim() || 'Guest Customer',
-        customerPhone: customerPhone.trim(),
+        customerId: currentUser.id,
+        customerName: customerName.trim() || currentUser.fullName || currentUser.name || 'FoodFax Customer',
+        customerPhone: customerPhone.trim() || currentUser.phone || '',
         orderType,
         tableNumber: orderType === 'DINE_IN' ? tableNumber.trim() : undefined,
         paymentMethod,

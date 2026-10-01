@@ -36,7 +36,7 @@ import {
   Star
 } from 'lucide-react';
 import { VegBadge } from '../common/VegBadge';
-import { GoogleShopMap } from '../common/GoogleShopMap';
+import { ShopDirectionMap } from './ShopDirectionMap';
 import { CancelOrderModal } from './CancelOrderModal';
 import { OrderRatingReview } from './OrderRatingReview';
 import { PostOrderFeedbackModal } from './PostOrderFeedbackModal';
@@ -921,42 +921,40 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
       {activeTab === 'map' && (
         <section 
           aria-label="Stall Location and Directions"
-          className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4"
+          className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm space-y-4"
         >
           <div className="flex items-center justify-between">
-            <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
               <MapPin className="w-4 h-4 text-orange-600" />
-              <span>Counter Location & Live Map</span>
+              <span>Live Directions to {order.shopName}</span>
             </h4>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
-              ~2 min walk
+            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+              Live GPS
             </span>
           </div>
 
-          {/* Real-time Google Maps & GPS Coordinate Visualizer */}
-          <GoogleShopMap
+          {/* ShopDirectionMap: Customer live GPS + shop pin + Routes API v2 route polyline */}
+          <ShopDirectionMap
             shopName={order.shopName}
-            shopLocation={order.shopLocation}
-            landmark={shop?.location?.landmark}
-            address={shop?.location?.address || shop?.address || order.shopLocation}
-            latitude={shop?.latitude || shop?.location?.latitude || 19.1197}
-            longitude={shop?.longitude || shop?.location?.longitude || 72.8464}
-            height="h-56"
+            shopLatitude={shop?.latitude || shop?.location?.latitude || 19.3515}
+            shopLongitude={shop?.longitude || shop?.location?.longitude || 72.8525}
+            shopAddress={shop?.location?.address || shop?.address || order.shopLocation}
+            height="h-64"
           />
 
           {/* Counter Pickup Details */}
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-slate-500">Pickup Counter:</span>
-              <span className="font-bold text-slate-900">Window 1 (Online Orders Fast-Track)</span>
+              <span className="text-slate-500 dark:text-slate-400">Pickup Counter:</span>
+              <span className="font-bold text-slate-900 dark:text-white">Window 1 (Online Orders Fast-Track)</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-500">Stall Contact:</span>
-              <span className="font-bold text-slate-900">{shop?.phone || '+91 98921 77880'}</span>
+              <span className="text-slate-500 dark:text-slate-400">Stall Contact:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{shop?.phone || '+91 98921 77880'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-slate-500">Dine-in / Seating:</span>
-              <span className="font-bold text-slate-900">
+              <span className="text-slate-500 dark:text-slate-400">Dine-in / Seating:</span>
+              <span className="font-bold text-slate-900 dark:text-white">
                 {shop?.tableServiceAvailable ? 'Available behind counter' : 'Counter pickup only'}
               </span>
             </div>
@@ -965,14 +963,15 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
           <div className="flex gap-2.5">
             <a
               href={`tel:${shop?.phone || '+919892177880'}`}
-              className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200 dark:border-slate-600"
             >
-              <Phone className="w-4 h-4 text-slate-600" />
+              <Phone className="w-4 h-4 text-slate-600 dark:text-slate-300" />
               <span>Call Stall ({shop?.phone || '+91 98921 77880'})</span>
             </a>
           </div>
         </section>
       )}
+
 
       {/* TAB 3: STALL SIGNALS & MESSAGES */}
       {activeTab === 'messages' && (
