@@ -47,7 +47,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
   const [categories, setCategories] = useState<ShopCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   
-  const [distanceFilter, setDistanceFilter] = useState<'5km' | '10km' | '15km' | '50km' | 'all' | '100km+'>('all');
+  const [distanceFilter, setDistanceFilter] = useState<'2km' | '4km' | 'all'>('2km');
   const [isRadarExpanded, setIsRadarExpanded] = useState<boolean>(false);
   const [onlyOpen, setOnlyOpen] = useState<boolean>(false);
   const [shops, setShops] = useState<Shop[]>([]);
@@ -143,12 +143,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
       city: city.name,
     });
     setIsCityModalOpen(false);
-    // For Naigaon preset, 5km or 15km is perfect
-    if (city.id === 'naigaon') {
-      setDistanceFilter('15km');
-    } else {
-      setDistanceFilter('50km');
-    }
+    setDistanceFilter('2km');
   };
 
   const handleSelectNaigaonShortcut = () => {
@@ -158,7 +153,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
       area: 'Naigaon East / Station Road',
       city: 'Naigaon / Vasai (MMR)',
     });
-    setDistanceFilter('15km');
+    setDistanceFilter('2km');
   };
 
   const handleDetectGPS = async () => {
@@ -219,25 +214,19 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
     filteredShops = filteredShops.filter((s) => s.isOpen);
   }
 
-  if (distanceFilter === '5km') {
-    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) <= 5.0);
-  } else if (distanceFilter === '10km') {
-    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) <= 10.0);
-  } else if (distanceFilter === '15km') {
-    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) <= 15.0);
-  } else if (distanceFilter === '50km') {
-    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) <= 50.0);
-  } else if (distanceFilter === '100km+') {
-    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 0) >= 100.0);
+  if (distanceFilter === '2km') {
+    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 999) <= 2.0);
+  } else if (distanceFilter === '4km') {
+    filteredShops = filteredShops.filter((s) => (s.location?.distanceKm ?? 999) <= 4.0);
   }
 
-  const popularShops = shops.filter((s) => s.rating >= 4.7 && (s.location?.distanceKm ?? 0) <= 25.0);
+  const maxDist = distanceFilter === '4km' ? 4.0 : distanceFilter === '2km' ? 2.0 : 25.0;
+  const popularShops = shops.filter((s) => s.rating >= 4.7 && (s.location?.distanceKm ?? 999) <= maxDist);
   const savedShops = shops.filter((s) => savedShopIds.includes(s.id));
 
   // Count stalls by distance buckets for quick indicator
-  const shopsUnder10km = shops.filter((s) => (s.location?.distanceKm ?? 0) <= 10.0).length;
-  const shopsUnder15km = shops.filter((s) => (s.location?.distanceKm ?? 0) <= 15.0).length;
-  const remoteShopsCount = shops.filter((s) => (s.location?.distanceKm ?? 0) >= 100.0).length;
+  const shopsUnder2km = shops.filter((s) => (s.location?.distanceKm ?? 999) <= 2.0).length;
+  const shopsUnder4km = shops.filter((s) => (s.location?.distanceKm ?? 999) <= 4.0).length;
 
   // Active token notification preview if user has an ongoing counter order
   const activeOrder = recentOrders.find(
@@ -446,7 +435,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
       </div>
 
       {/* POPULAR NEAR YOU / BEST STALLS */}
-      {selectedCategory === 'all' && popularShops.length > 0 && distanceFilter !== '100km+' && (
+      {selectedCategory === 'all' && popularShops.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -481,21 +470,72 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
 
       {/* NEARBY SHOPS / ALL COUNTERS */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center">
               <Store className="w-3.5 h-3.5 text-orange-600" />
             </div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-              {distanceFilter === '100km+'
-                ? 'Outstation & Cross-City Food Stalls (100+ km)'
-                : selectedCategory === 'all'
-                ? `Food Stalls in ${activeLocation.city} (${distanceFilter})`
-                : 'Category Stalls'}
+              {distanceFilter === '2km'
+                ? `Food Stalls Within 2 km (Walking)`
+                : distanceFilter === '4km'
+                ? `Food Stalls Within 4 km (Bike / Car)`
+                : `All Food Stalls in ${activeLocation.city}`}
             </h2>
             <span className="text-xs text-slate-400 font-semibold">
               ({filteredShops.length})
             </span>
+          </div>
+
+          {/* Mode Switcher: 2 km Walking vs 4 km Bike/Car vs All */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold self-start sm:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => setDistanceFilter('2km')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                distanceFilter === '2km'
+                  ? 'bg-white text-orange-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>🚶 Walking (2 km)</span>
+              {shopsUnder2km > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  distanceFilter === '2km' ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {shopsUnder2km}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDistanceFilter('4km')}
+              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                distanceFilter === '4km'
+                  ? 'bg-white text-orange-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>🛵 Bike / Car (4 km)</span>
+              {shopsUnder4km > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  distanceFilter === '4km' ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {shopsUnder4km}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDistanceFilter('all')}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                distanceFilter === 'all'
+                  ? 'bg-white text-orange-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>All ({shops.length})</span>
+            </button>
           </div>
         </div>
 
@@ -507,50 +547,38 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
 
             <div className="space-y-1.5 max-w-lg mx-auto">
               <h3 className="text-base sm:text-lg font-bold text-slate-900">
-                No shops found nearby
+                {distanceFilter === '2km'
+                  ? 'No shops within 2 km walking range'
+                  : distanceFilter === '4km'
+                  ? 'No shops within 4 km vehicle range'
+                  : 'No shops found nearby'}
               </h3>
               <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                {`No registered food stalls found within ${distanceFilter === 'all' ? 'any range' : distanceFilter} of ${activeLocation.area || activeLocation.city}.`}
+                {distanceFilter === '2km'
+                  ? `No registered food stalls found within 2 km of ${activeLocation.area || activeLocation.city}. Try switching to Bike/Car mode to expand up to 4 km.`
+                  : `No registered food stalls found within ${distanceFilter === 'all' ? 'any range' : distanceFilter} of ${activeLocation.area || activeLocation.city}.`}
               </p>
             </div>
 
-            {/* If registered stalls exist in database (e.g. Deepak Chinese Corner in Naigaon) but filtered out by distance */}
-            {shops.length > 0 && (
-              <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-4 max-w-md mx-auto text-left space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🍜</span>
-                    <h4 className="text-xs font-bold text-slate-900">
-                      Registered Stall: {shops[0].name}
-                    </h4>
-                  </div>
-                  <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded">
-                    ~{shops[0].location?.distanceKm?.toFixed(1) || '25.8'} km away
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600">
-                  Located at {shops[0].location?.address || 'Shop No. 4, Station Road, Naigaon East'}.
-                </p>
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    onClick={() => {
-                      setDistanceFilter('50km');
-                      setSelectedCategory('all');
-                      setOnlyOpen(false);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-xs transition-colors"
-                  >
-                    View {shops[0].name} (Range 50 km)
-                  </button>
-                  <button
-                    onClick={handleSelectNaigaonShortcut}
-                    className="px-3 py-1.5 rounded-lg bg-white border border-orange-300 text-orange-700 hover:bg-orange-50 text-xs font-bold transition-colors"
-                  >
-                    Set Location to Naigaon East
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* Quick helper buttons to switch to 4km or all */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              {distanceFilter === '2km' && shopsUnder4km > 0 && (
+                <button
+                  onClick={() => setDistanceFilter('4km')}
+                  className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  <span>🛵 Check Up to 4 km (Bike / Car Mode · {shopsUnder4km} stalls)</span>
+                </button>
+              )}
+              {distanceFilter !== 'all' && (
+                <button
+                  onClick={() => setDistanceFilter('all')}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors"
+                >
+                  View All Stalls ({shops.length})
+                </button>
+              )}
+            </div>
 
             {/* Standard Helpful Actions */}
             <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">

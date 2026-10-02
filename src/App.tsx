@@ -11,6 +11,7 @@ import { Header } from './components/common/Header';
 import { BottomNav } from './components/common/BottomNav';
 import { FloatingCartBar } from './components/common/FloatingCartBar';
 import { CartConflictModal } from './components/common/CartConflictModal';
+import { DistanceWarningModal } from './components/common/DistanceWarningModal';
 import { QRScanModal } from './components/common/QRScanModal';
 import { GlobalLoadingSkeleton } from './components/common/GlobalLoadingSkeleton';
 import { AccessibilityModal } from './components/common/AccessibilityModal';
@@ -208,6 +209,9 @@ const AppContent: React.FC = () => {
       {/* Single-Shop Cart Conflict Prevention Modal */}
       <CartConflictModal />
 
+      {/* Far Distance Warning & 4km Bike/Car Pickup Modal */}
+      <DistanceWarningModal />
+
       {/* QR Scanner & Simulation Modal */}
       <QRScanModal
         isOpen={isQRScannerOpen}
@@ -217,17 +221,65 @@ const AppContent: React.FC = () => {
   );
 };
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[FoodFax ErrorBoundary] caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-slate-800">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xl max-w-md w-full text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-xl font-bold">
+              ⚠️
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">Application Error</h2>
+            <p className="text-xs text-slate-600 font-mono bg-slate-100 p-3 rounded-xl overflow-x-auto text-left whitespace-pre-wrap">
+              {this.state.error?.message || 'An unexpected rendering error occurred.'}
+            </p>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors w-full shadow-xs"
+            >
+              Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AccessibilityProvider>
-      <AuthProvider>
-        <RouterProvider>
-          <CartProvider>
-            <AppContent />
-          </CartProvider>
-        </RouterProvider>
-      </AuthProvider>
-    </AccessibilityProvider>
+    <ErrorBoundary>
+      <AccessibilityProvider>
+        <AuthProvider>
+          <RouterProvider>
+            <CartProvider>
+              <AppContent />
+            </CartProvider>
+          </RouterProvider>
+        </AuthProvider>
+      </AccessibilityProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { CartItem, MenuItem, Shop, Order } from '../types';
 import { orderService } from '../services/orderService';
+import { calculateDistanceKm, DEFAULT_CUSTOMER_LOCATION } from '../services/geoService';
+
+export interface DistanceWarningData {
+  shop: Shop;
+  item: MenuItem;
+  quantity: number;
+  distanceKm: number;
+  isVehicleAllowed: boolean;
+  userArea: string;
+}
 
 interface CartContextType {
   items: CartItem[];
@@ -19,6 +29,9 @@ interface CartContextType {
   commitOrderAndClearCart: (orderData: Parameters<typeof orderService.createOrder>[0]) => Promise<Order>;
   conflictData: { newItem: MenuItem; newShop: Shop; existingShopName: string } | null;
   resolveConflict: (replace: boolean) => void;
+  distanceWarningData: DistanceWarningData | null;
+  confirmVehiclePickup: () => void;
+  cancelDistanceWarning: () => void;
 }
 
 const CART_STORAGE_KEY = 'foodflow_cart_state';
@@ -122,6 +135,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     existingShopName: string;
   } | null>(null);
 
+  const [distanceWarningData, setDistanceWarningData] = useState<DistanceWarningData | null>(null);
+  const [confirmedVehicleShops, setConfirmedVehicleShops] = useState<Set<string>>(() => new Set());
+
   // Persist to localStorage
   useEffect(() => {
     try {
@@ -145,9 +161,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return item ? item.quantity : 0;
   };
 
-  const addItem = (item: MenuItem, shop: Shop, quantity: number = 1) => {
-    if (!item.isAvailable || quantity <= 0) return;
-
+  const addItemInternal = (item: MenuItem, shop: Shop, quantity: number = 1) => {
     // Check if cart has items from a different shop
     if (shopId && shopId !== shop.id && items.length > 0) {
       setConflictData({
@@ -171,6 +185,72 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return [...prev, { menuItem: item, quantity, shopId: shop.id }];
     });
+  };
+
+  const addItem = (item: MenuItem, shop: Shop, quantity: number = 1) => {
+    if (!item.isAvailable || quantity <= 0) return;
+
+    // Check distance between customer location and food stall
+    let userLoc = DEFAULT_CUSTOMER_LOCATION;
+    try {
+      const saved = localStorage.getItem('foodfax_active_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.latitude && parsed.longitude) {
+          userLoc = parsed;
+        }
+      }
+    } catch {}
+
+    const shopLat = shop.latitude || shop.location?.latitude;
+    const shopLng = shop.longitude || shop.location?.longitude;
+    let distanceKm = shop.location?.distanceKm;
+    if (userLoc.latitude && userLoc.longitude && shopLat && shopLng) {
+      distanceKm = calculateDistanceKm(userLoc.latitude, userLoc.longitude, shopLat, shopLng);
+    }
+
+    // Distance threshold checks
+    if (distanceKm !== undefined && !isNaN(distanceKm)) {
+      if (distanceKm > 4.0) {
+        // Exceeds 4 km strict limit
+        setDistanceWarningData({
+          shop,
+          item,
+          quantity,
+          distanceKm,
+          isVehicleAllowed: false,
+          userArea: userLoc.area || userLoc.city || 'Your Location',
+        });
+        return;
+      }
+
+      if (distanceKm > 2.0 && !confirmedVehicleShops.has(shop.id)) {
+        // Between 2 km and 4 km, prompt with Bike/Car option
+        setDistanceWarningData({
+          shop,
+          item,
+          quantity,
+          distanceKm,
+          isVehicleAllowed: true,
+          userArea: userLoc.area || userLoc.city || 'Your Location',
+        });
+        return;
+      }
+    }
+
+    addItemInternal(item, shop, quantity);
+  };
+
+  const confirmVehiclePickup = () => {
+    if (!distanceWarningData) return;
+    const { shop, item, quantity } = distanceWarningData;
+    setConfirmedVehicleShops((prev) => new Set(prev).add(shop.id));
+    addItemInternal(item, shop, quantity);
+    setDistanceWarningData(null);
+  };
+
+  const cancelDistanceWarning = () => {
+    setDistanceWarningData(null);
   };
 
   const resolveConflict = (replace: boolean) => {
@@ -268,6 +348,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         commitOrderAndClearCart,
         conflictData,
         resolveConflict,
+        distanceWarningData,
+        confirmVehiclePickup,
+        cancelDistanceWarning,
       }}
     >
       {children}

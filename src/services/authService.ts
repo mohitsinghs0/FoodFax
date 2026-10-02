@@ -2,6 +2,7 @@ import { supabase, supabaseAdmin, isSupabaseConfigured } from '../supabase';
 import { AuthUser, OwnerBusinessContext, Shop, UserRole } from '../types';
 import { shopService } from './shopService';
 import { menuService } from './menuService';
+import { cookieService, DEFAULT_SESSION_DAYS } from './cookieService';
 
 // Storage keys for instantaneous cached hydrate
 const AUTH_USER_KEY = 'foodflow_auth_user';
@@ -124,13 +125,43 @@ class AuthService {
 
   private restoreCachedSession(): void {
     try {
+      // 1. Check persistent 30-day session cookie
+      const cookieSession = cookieService.getAuthSession();
+      if (cookieSession && cookieSession.cachedUser) {
+        this.currentUser = cookieSession.cachedUser;
+        this.currentBusiness = cookieSession.cachedBusiness;
+        return;
+      }
+      if (cookieSession && cookieSession.payload) {
+        this.currentUser = {
+          id: cookieSession.payload.userId,
+          fullName: cookieSession.payload.fullName,
+          name: cookieSession.payload.fullName,
+          email: cookieSession.payload.email,
+          phone: cookieSession.payload.phone,
+          role: cookieSession.payload.role,
+          shopId: cookieSession.payload.shopId,
+          isActive: true,
+          profileCompleted: true,
+          isDemo: cookieSession.payload.isDemo,
+        };
+        this.currentBusiness = null;
+        return;
+      }
+
+      // 2. Fallback to localStorage
       const storedUser = localStorage.getItem(AUTH_USER_KEY);
       const storedBusiness = localStorage.getItem(AUTH_BUSINESS_KEY);
       if (storedUser) {
-        this.currentUser = JSON.parse(storedUser);
-      }
-      if (storedBusiness) {
-        this.currentBusiness = JSON.parse(storedBusiness);
+        const parsed = JSON.parse(storedUser);
+        if (parsed && parsed.id) {
+          this.currentUser = parsed;
+          if (storedBusiness) {
+            this.currentBusiness = JSON.parse(storedBusiness);
+          }
+          // Seed the 30-day cookie for future browser sessions
+          cookieService.saveAuthSession(this.currentUser!, this.currentBusiness, DEFAULT_SESSION_DAYS);
+        }
       }
     } catch {
       this.currentUser = null;
@@ -143,15 +174,11 @@ class AuthService {
     this.currentBusiness = business;
 
     if (user) {
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+      // Save 30-day persistent session cookie & localStorage
+      cookieService.saveAuthSession(user, business, DEFAULT_SESSION_DAYS);
     } else {
-      localStorage.removeItem(AUTH_USER_KEY);
-    }
-
-    if (business) {
-      localStorage.setItem(AUTH_BUSINESS_KEY, JSON.stringify(business));
-    } else {
-      localStorage.removeItem(AUTH_BUSINESS_KEY);
+      // Destroy cookie & localStorage on logout
+      cookieService.clearAuthSession();
     }
 
     this.notifyListeners();
@@ -164,8 +191,9 @@ class AuthService {
         const spUser = session?.user;
 
         if (!spUser) {
-          // If we had a demo user active, don't clear it on null supabase session
-          if (this.currentUser?.isDemo) {
+          // If user is logged in via persistent cookie or demo user, do NOT wipe session
+          const activeCookie = cookieService.getAuthSession();
+          if (activeCookie?.cachedUser || this.currentUser?.isDemo || this.currentUser?.id) {
             return;
           }
           this.persistSession(null, null);
@@ -392,6 +420,12 @@ class AuthService {
         console.warn('[AuthService] Error during session refresh:', err);
       }
     }
+
+    // Refresh sliding expiration on device visit (+30 days)
+    if (this.currentUser) {
+      cookieService.saveAuthSession(this.currentUser, this.currentBusiness, DEFAULT_SESSION_DAYS);
+    }
+
     return { user: this.currentUser, business: this.currentBusiness };
   }
 
@@ -1431,6 +1465,7 @@ class AuthService {
     } catch (err) {
       console.warn('[AuthService] Supabase signOut notice:', err);
     }
+    cookieService.clearAuthSession();
     this.persistSession(null, null);
   }
 

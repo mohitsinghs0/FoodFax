@@ -139,8 +139,8 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Discovery Filters
-  const [selectedRadius, setSelectedRadius] = useState<RadiusKm>(3);
+  // Discovery Filters - Fixed strictly to 2 km
+  const [selectedRadius, setSelectedRadius] = useState<RadiusKm>(2);
   const [selectedServiceType, setSelectedServiceType] = useState<ServiceMode>('all');
 
   // Manual search
@@ -152,8 +152,8 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
   const [nearbySpots, setNearbySpots] = useState<NearbyFoodSpot[]>([]);
   const [isLoadingSpots, setIsLoadingSpots] = useState<boolean>(true);
 
-  // Map Provider: 'google' or fallback 'leaflet'
-  const [mapEngine, setMapEngine] = useState<'google' | 'leaflet'>('google');
+  // Map Provider: 'leaflet' (Clean HD OpenStreetMap, zero watermarks) or 'google'
+  const [mapEngine, setMapEngine] = useState<'google' | 'leaflet'>('leaflet');
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState<boolean>(false);
 
   // Map refs
@@ -189,14 +189,13 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
     }
   }, [initialLocation?.latitude, initialLocation?.longitude, initialLocation?.city, initialLocation?.area]);
 
-  // Load Google Maps Script
+  // Load Google Maps Script (available if user chooses to switch to Google Maps)
   useEffect(() => {
     let isMounted = true;
 
     if (window.google?.maps) {
       if (isMounted) {
         setGoogleMapsLoaded(true);
-        setMapEngine('google');
       }
       return;
     }
@@ -227,7 +226,6 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
       script.onload = () => {
         if (isMounted && window.google?.maps) {
           setGoogleMapsLoaded(true);
-          setMapEngine('google');
         }
       };
       script.onerror = () => {
@@ -241,7 +239,6 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
       existingScript.addEventListener('load', () => {
         if (isMounted && window.google?.maps) {
           setGoogleMapsLoaded(true);
-          setMapEngine('google');
         }
       });
       existingScript.addEventListener('error', () => {
@@ -1062,28 +1059,14 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
         </p>
       )}
 
-      {/* 4. Interactive Filters: Discovery Radius & Service Mode */}
+      {/* 4. Fixed Discovery Radius (2 km) & Service Mode Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
-        {/* Radius Filter Pills */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
-            <span>Radius:</span>
-          </span>
-          {([1, 2, 3, 5] as RadiusKm[]).map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setSelectedRadius(r)}
-              className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-xs font-black transition-all ${
-                selectedRadius === r
-                  ? 'bg-orange-600 text-white shadow-xs border border-orange-600 scale-105'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-              }`}
-            >
-              {r} km
-            </button>
-          ))}
+        {/* Fixed 2 km Radius Indicator Badge */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 text-xs font-bold text-orange-700 dark:text-orange-300 shadow-2xs">
+            <MapPin className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+            <span>Coverage Radius: <strong className="font-extrabold text-orange-600 dark:text-orange-400">2 km</strong> (Walking & Quick Pickup Zone)</span>
+          </div>
         </div>
 
         {/* Service Mode Filter Chips */}
@@ -1138,12 +1121,25 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
         </div>
       </div>
 
-      {/* 5. Interactive Map Viewport (Google Maps with Leaflet OSM fallback) */}
+      {/* 5. Interactive Map Viewport (Clean HD Street Map with Google Maps Toggle) */}
       <div className="relative w-full h-72 sm:h-96 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner bg-slate-100 dark:bg-slate-950">
         <div ref={mapContainerRef} className="w-full h-full z-0" />
 
         {/* Custom Map Controls Overlay (Top Right) */}
-        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
+        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
+          {/* Map Engine Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              // Toggle engine
+              setMapEngine((prev) => (prev === 'leaflet' ? 'google' : 'leaflet'));
+            }}
+            className="px-2.5 py-1 rounded-xl bg-white/95 dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 shadow-md backdrop-blur-md transition-colors flex items-center gap-1"
+            title="Switch between Clean High-Definition Street Map (No watermark) and Google Maps"
+          >
+            <span>{mapEngine === 'leaflet' ? '🗺️ Clean HD Map' : '🌐 Google Maps'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleZoomIn}
@@ -1177,7 +1173,7 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
         <div className="absolute top-3 left-3 z-10 pointer-events-none">
           <div className="px-2.5 py-1 rounded-xl bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200 dark:border-slate-700/80 text-[11px] font-extrabold text-orange-600 dark:text-orange-400 shadow-md flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
-            <span>Scanning Radius: {selectedRadius} km</span>
+            <span>Scanning Radius: 2 km</span>
           </div>
         </div>
 

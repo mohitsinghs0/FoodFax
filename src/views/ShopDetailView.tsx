@@ -22,8 +22,11 @@ import {
   ChevronRight,
   ShieldCheck,
   Check,
-  Mic
+  Mic,
+  Bike,
+  AlertTriangle
 } from 'lucide-react';
+import { calculateDistanceKm, DEFAULT_CUSTOMER_LOCATION } from '../services/geoService';
 import { VegBadge } from '../components/common/VegBadge';
 
 interface ShopDetailViewProps {
@@ -129,6 +132,28 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
   // Extract relevant categories for this shop
   const shopCategoryIds = new Set(menuItems.map((i) => i.categoryId));
   const availableCategories = categories.filter((c) => shopCategoryIds.has(c.id));
+
+  // Distance from active customer location
+  const distanceKm = useMemo(() => {
+    if (!shop) return undefined;
+    let customerLoc = DEFAULT_CUSTOMER_LOCATION;
+    try {
+      const saved = localStorage.getItem('foodfax_active_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.latitude && parsed.longitude) {
+          customerLoc = parsed;
+        }
+      }
+    } catch {}
+
+    const sLat = shop.latitude || shop.location?.latitude;
+    const sLng = shop.longitude || shop.location?.longitude;
+    if (customerLoc.latitude && customerLoc.longitude && sLat && sLng) {
+      return calculateDistanceKm(customerLoc.latitude, customerLoc.longitude, sLat, sLng);
+    }
+    return shop.location?.distanceKm;
+  }, [shop]);
 
   if (loading) {
     return (
@@ -264,6 +289,38 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
               <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
               <span className="truncate max-w-[150px] xs:max-w-xs">{shop.location?.address || shop.address || 'Counter Stall'}</span>
             </div>
+
+            {distanceKm !== undefined && (
+              <>
+                <span className="text-slate-300">•</span>
+                <div
+                  className={`flex items-center gap-1 font-bold px-2 py-0.5 rounded-md border text-[11px] ${
+                    distanceKm <= 2.0
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : distanceKm <= 4.0
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}
+                >
+                  {distanceKm <= 2.0 ? (
+                    <>
+                      <MapPin className="w-3 h-3 text-emerald-600" />
+                      <span>~{distanceKm} km (Walking Zone)</span>
+                    </>
+                  ) : distanceKm <= 4.0 ? (
+                    <>
+                      <Bike className="w-3 h-3 text-amber-600" />
+                      <span>~{distanceKm} km (Bike / Car Zone)</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-3 h-3 text-rose-600" />
+                      <span>~{distanceKm} km (Exceeds 4 km Limit)</span>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {shop.contactPhone && (
@@ -277,6 +334,36 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
           )}
         </div>
       </div>
+
+      {/* Far Distance Caution Banner (if > 2 km) */}
+      {distanceKm !== undefined && distanceKm > 2.0 && (
+        <div
+          className={`border-b px-3 sm:px-8 py-2.5 text-xs ${
+            distanceKm <= 4.0
+              ? 'bg-amber-50/90 border-amber-200 text-amber-900'
+              : 'bg-rose-50/90 border-rose-200 text-rose-900'
+          }`}
+        >
+          <div className="max-w-6xl mx-auto flex items-center gap-2">
+            {distanceKm <= 4.0 ? (
+              <Bike className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            )}
+            <p className="leading-snug">
+              {distanceKm <= 4.0 ? (
+                <span>
+                  <strong>Pickup Notice ({distanceKm} km away):</strong> This counter is outside your 2 km local walking zone. Recommended for pickup via <strong>Bike or Car</strong>.
+                </span>
+              ) : (
+                <span>
+                  <strong>Distance Limit ({distanceKm} km away):</strong> This counter exceeds the standard 4 km pickup limit. Please choose a closer counter for quick pickup.
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="max-w-6xl mx-auto px-3 sm:px-8 py-4 sm:py-6 space-y-5 sm:space-y-6 overflow-x-hidden min-w-0">
