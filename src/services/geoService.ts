@@ -171,29 +171,81 @@ export const DEFAULT_CUSTOMER_LOCATION: GeoPoint & { area: string; city: string 
 };
 
 /**
- * Browser Geolocation helper
+ * High-Accuracy Browser Geolocation helper
+ * Uses watchPosition with maximumAge: 0 to acquire genuine hardware GPS satellite locks
+ * rather than relying on stale cached IP/cell-tower approximations.
  */
 export async function getBrowserLocation(): Promise<GeoPoint> {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
       reject(new Error('Geolocation is not supported by your browser.'));
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    let bestPosition: GeolocationPosition | null = null;
+    let watchId: number | null = null;
+    let settled = false;
+
+    const cleanup = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    // Timeout safety fallback: after 7 seconds, return best reading or error
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+
+      if (bestPosition) {
         resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          latitude: bestPosition.coords.latitude,
+          longitude: bestPosition.coords.longitude,
         });
+      } else {
+        // Fallback to single fast attempt
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      }
+    }, 7000);
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (settled) return;
+
+        // Keep the reading with highest accuracy (lowest accuracy radius in meters)
+        if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
+          bestPosition = pos;
+        }
+
+        // Pinpoint accuracy achieved (satellite locked within 25 meters)
+        if (pos.coords.accuracy <= 25) {
+          settled = true;
+          cleanup();
+          resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+        }
       },
-      (error) => {
-        reject(error);
+      (err) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
       },
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 60000,
+        maximumAge: 0, // Force fresh hardware GPS reading
       }
     );
   });

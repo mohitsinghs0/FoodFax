@@ -19,7 +19,7 @@ import {
   Map as MapIcon,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../supabase';
-import { calculateDistanceKm, DEFAULT_CUSTOMER_LOCATION, INDIAN_CITIES } from '../../services/geoService';
+import { calculateDistanceKm, DEFAULT_CUSTOMER_LOCATION, INDIAN_CITIES, getBrowserLocation } from '../../services/geoService';
 import { shopService } from '../../services/shopService';
 import { Shop } from '../../types';
 
@@ -168,9 +168,11 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
 
   // Leaflet fallback refs
   const leafletMapRef = useRef<L.Map | null>(null);
+  const leafletTileLayerRef = useRef<L.TileLayer | null>(null);
   const leafletRadiusCircleRef = useRef<L.Circle | null>(null);
   const leafletCustomerMarkerRef = useRef<L.Marker | null>(null);
   const leafletShopMarkersLayerRef = useRef<L.LayerGroup | null>(null);
+  const [mapTheme, setMapTheme] = useState<'voyager' | 'osm'>('voyager');
 
   // Detect dark mode
   const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
@@ -304,37 +306,25 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
     [onLocationChange]
   );
 
-  // Locate Customer via navigator.geolocation
-  const handleLocateCustomer = useCallback(() => {
+  // Locate Customer via high-accuracy GPS getBrowserLocation
+  const handleLocateCustomer = useCallback(async () => {
     setIsLocating(true);
     setLocationError(null);
 
-    if (!navigator.geolocation) {
-      handleIpFallback('Browser does not support GPS Geolocation.');
-      return;
+    try {
+      const coords = await getBrowserLocation();
+      const newCoords = {
+        lat: coords.latitude,
+        lng: coords.longitude,
+      };
+      setCustomerCoords(newCoords);
+      setLocationSource('gps');
+      setIsLocating(false);
+      await reverseGeocode(newCoords.lat, newCoords.lng);
+    } catch (err: any) {
+      console.warn('GPS location failed or denied, defaulting to Naigaon East:', err?.message || err);
+      handleIpFallback('GPS permission denied or unavailable. Set to Naigaon East.');
     }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const newCoords = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        };
-        setCustomerCoords(newCoords);
-        setLocationSource('gps');
-        setIsLocating(false);
-        await reverseGeocode(newCoords.lat, newCoords.lng);
-      },
-      (err) => {
-        console.warn('GPS location failed or denied, defaulting to Naigaon East:', err.message);
-        handleIpFallback('GPS permission denied or unavailable. Set to Naigaon East.');
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 30000,
-      }
-    );
   }, [handleIpFallback, reverseGeocode]);
 
   // Manual search for Area or Pincode
@@ -762,7 +752,7 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
     if (mapEngine !== 'leaflet' || !mapContainerRef.current) return;
 
     if (!leafletMapRef.current) {
-      // Free OpenStreetMap Standard Tiles (No API key, No CartoDB watermarks)
+      // High-Definition CartoDB Voyager Map (Zero Cost, No Billing, No Watermarks, Crisp Roads & Buildings)
       const map = L.map(mapContainerRef.current, {
         center: [customerCoords.lat, customerCoords.lng],
         zoom: 14,
@@ -770,11 +760,19 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
         attributionControl: false,
       });
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      const tileUrl = isDarkMode
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : mapTheme === 'voyager'
+        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+      const tileLayer = L.tileLayer(tileUrl, {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors',
+        subdomains: 'abcd',
+        attribution: '&copy; OpenStreetMap contributors & CartoDB',
       }).addTo(map);
 
+      leafletTileLayerRef.current = tileLayer;
       leafletShopMarkersLayerRef.current = L.layerGroup().addTo(map);
       leafletMapRef.current = map;
     }
@@ -783,9 +781,22 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
+        leafletTileLayerRef.current = null;
       }
     };
   }, [mapEngine]);
+
+  // Update Leaflet tile style dynamically on theme change
+  useEffect(() => {
+    if (!leafletTileLayerRef.current) return;
+    const tileUrl = isDarkMode
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : mapTheme === 'voyager'
+      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+    leafletTileLayerRef.current.setUrl(tileUrl);
+  }, [mapTheme, isDarkMode]);
 
   // Leaflet customer pin & radius circle
   useEffect(() => {
@@ -1127,17 +1138,16 @@ export const NearbyFoodRadar: React.FC<NearbyFoodRadarProps> = ({
 
         {/* Custom Map Controls Overlay (Top Right) */}
         <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5 items-end">
-          {/* Map Engine Toggle */}
+          {/* Map HD Style Toggle (Zero Cost, No Watermarks) */}
           <button
             type="button"
             onClick={() => {
-              // Toggle engine
-              setMapEngine((prev) => (prev === 'leaflet' ? 'google' : 'leaflet'));
+              setMapTheme((prev) => (prev === 'voyager' ? 'osm' : 'voyager'));
             }}
             className="px-2.5 py-1 rounded-xl bg-white/95 dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 shadow-md backdrop-blur-md transition-colors flex items-center gap-1"
-            title="Switch between Clean High-Definition Street Map (No watermark) and Google Maps"
+            title="Toggle between Clean High-Definition Street Map (CartoDB Voyager) and OpenStreetMap"
           >
-            <span>{mapEngine === 'leaflet' ? '🗺️ Clean HD Map' : '🌐 Google Maps'}</span>
+            <span>{mapTheme === 'voyager' ? '🗺️ Clean HD Map' : '🌍 Standard Map'}</span>
           </button>
 
           <button
