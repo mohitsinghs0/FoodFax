@@ -74,10 +74,10 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
           );
           if (cachedMenu.length > 0) {
             setMenuItems(cachedMenu);
+            setLoading(false); // Render immediately if cached items exist
           }
           setCategories(menuService.getStoredCategories());
           setIsSaved(shopService.isShopSaved(instantFound.id));
-          setLoading(false); // Render immediately without waiting!
         }
       } catch {}
 
@@ -90,24 +90,19 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
         if (foundShop && isMounted) {
           setShop(foundShop);
           try {
-            let [items, cats] = await Promise.all([
-              menuService.getMenuItems(foundShop.id),
+            const [items, cats] = await Promise.all([
+              menuService.getMenuItems(foundShop.id, foundShop.slug),
               shopService.getCategories(),
             ]);
-            if ((!items || items.length === 0) && foundShop.slug && foundShop.slug !== foundShop.id) {
-              const slugItems = await menuService.getMenuItems(foundShop.slug);
-              if (slugItems && slugItems.length > 0) {
-                items = slugItems;
-              }
-            }
             if (isMounted) {
-              setMenuItems(items || []);
+              setMenuItems(items && items.length > 0 ? items : []);
               setCategories(cats || []);
               setIsSaved(shopService.isShopSaved(foundShop.id));
             }
           } catch {
             if (isMounted) {
-              setMenuItems([]);
+              const fallbackItems = await menuService.getMenuItems(foundShop.id, foundShop.slug);
+              setMenuItems(fallbackItems || []);
             }
           }
         }

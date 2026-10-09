@@ -1,5 +1,5 @@
 import { Shop, ShopCategory, MenuItem, ShopReview } from '../types';
-import { MOCK_CATEGORIES } from '../data/mockData';
+import { MOCK_CATEGORIES, MOCK_SHOPS } from '../data/mockData';
 import { firestoreSync, MOCK_SHOP_IDS, normalizeShopDoc } from './firestoreSyncService';
 import { calculateDistanceKm, DEFAULT_CUSTOMER_LOCATION } from './geoService';
 import { isSupabaseConfigured } from '../supabase';
@@ -108,6 +108,10 @@ export const shopService = {
       // fallback
     }
 
+    if (!isSupabaseConfigured) {
+      return MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+    }
+
     return [];
   },
 
@@ -211,6 +215,12 @@ export const shopService = {
       shops = this.getStoredShops(isRealUser).filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
     }
 
+    // Graceful fallback: If no live stalls exist (e.g. fresh clone, unconfigured Supabase or empty cloud DB),
+    // display verified default stalls from MOCK_SHOPS so the user is never left with an empty app
+    if (shops.length === 0) {
+      shops = MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+    }
+
     const loc = userLocation || DEFAULT_CUSTOMER_LOCATION;
 
     // Recalculate distance for each shop based on coordinates
@@ -276,7 +286,7 @@ export const shopService = {
 
     const deletedRaw = typeof window !== 'undefined' ? localStorage.getItem('foodflow_deleted_shops') : null;
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
-    if (deletedSet.has(cleanId) || MOCK_SHOP_IDS.has(cleanId)) {
+    if (deletedSet.has(cleanId)) {
       return null;
     }
 
@@ -284,7 +294,7 @@ export const shopService = {
     if (isSupabaseConfigured) {
       try {
         const remoteShop = await firestoreSync.getShop(cleanId);
-        if (remoteShop && !remoteShop.isDemo && !MOCK_SHOP_IDS.has(remoteShop.id) && !deletedSet.has(remoteShop.id) && !isShopSuspendedOrKycPending(remoteShop)) {
+        if (remoteShop && !remoteShop.isDemo && !deletedSet.has(remoteShop.id) && !isShopSuspendedOrKycPending(remoteShop)) {
           return remoteShop;
         }
       } catch (err) {
@@ -300,7 +310,7 @@ export const shopService = {
         (s.slug && s.slug.toLowerCase() === cleanId) ||
         (s.name && s.name.toLowerCase() === cleanId)
     );
-    if (found && !deletedSet.has(found.id) && !MOCK_SHOP_IDS.has(found.id) && !isShopSuspendedOrKycPending(found)) return found;
+    if (found && !deletedSet.has(found.id) && !isShopSuspendedOrKycPending(found)) return found;
 
     // 3. Match stripped alphanumeric characters
     const cleanAlpha = cleanId.replace(/[^a-z0-9]/g, '');
@@ -310,7 +320,7 @@ export const shopService = {
         s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha ||
         s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha
     );
-    if (alphaFound && !deletedSet.has(alphaFound.id) && !MOCK_SHOP_IDS.has(alphaFound.id)) return alphaFound;
+    if (alphaFound && !deletedSet.has(alphaFound.id)) return alphaFound;
 
     // 4. Check INITIAL_REAL_SHOPS explicitly
     const realFound = INITIAL_REAL_SHOPS.find(
@@ -319,7 +329,16 @@ export const shopService = {
         (s.slug && s.slug.toLowerCase() === cleanId) ||
         (s.name && s.name.toLowerCase() === cleanId)
     );
-    if (realFound && !deletedSet.has(realFound.id) && !MOCK_SHOP_IDS.has(realFound.id)) return realFound;
+    if (realFound && !deletedSet.has(realFound.id)) return realFound;
+
+    // 5. Fallback to MOCK_SHOPS
+    const mockFound = MOCK_SHOPS.find(
+      (s) =>
+        (s.id && s.id.toLowerCase() === cleanId) ||
+        (s.slug && s.slug.toLowerCase() === cleanId) ||
+        (s.name && s.name.toLowerCase() === cleanId)
+    );
+    if (mockFound && !deletedSet.has(mockFound.id)) return mockFound;
 
     // If not found, return null so caller can handle accurately
     return null;

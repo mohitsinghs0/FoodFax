@@ -48,13 +48,21 @@ export const menuService = {
     }
   },
 
-  async getShopMenu(shopId: string): Promise<MenuItem[]> {
-    await new Promise((r) => setTimeout(r, 40));
+  async getShopMenu(shopId: string, shopSlug?: string): Promise<MenuItem[]> {
+    await new Promise((r) => setTimeout(r, 20));
 
-    // 1. Try fetching from Firestore first
+    // 1. Try fetching from Supabase first with timeout protection
     try {
-      const remoteItems = await firestoreSync.getMenuItemsByShop(shopId);
+      const remoteItems = await firestoreSync.getMenuItemsByShop(shopId, shopSlug);
       if (remoteItems && remoteItems.length > 0) {
+        // Optimistically cache items in local store so future loads are instantaneous
+        try {
+          const currentStored = this.getStoredItems();
+          const mergedMap = new Map<string, MenuItem>();
+          currentStored.forEach((i) => mergedMap.set(i.id, i));
+          remoteItems.forEach((i) => mergedMap.set(i.id, i));
+          this.saveStoredItems(Array.from(mergedMap.values()));
+        } catch {}
         return remoteItems;
       }
     } catch {
@@ -63,14 +71,18 @@ export const menuService = {
 
     // 2. Check local store
     const items = this.getStoredItems();
-    const lowerId = shopId.toLowerCase();
-    const matched = items.filter((item) => item.shopId.toLowerCase() === lowerId);
+    const lowerId = (shopId || '').toLowerCase().trim();
+    const lowerSlug = (shopSlug || '').toLowerCase().trim();
+    const matched = items.filter((item) => {
+      const sid = (item.shopId || '').toLowerCase().trim();
+      return sid === lowerId || (lowerSlug && sid === lowerSlug);
+    });
     if (matched.length > 0) {
       return matched;
     }
 
-    // 3. Stalls return their registered live menu items
-    return [];
+    // 3. Resilient fallback to stall menu generator
+    return firestoreSync.getMenuItems(shopId, shopSlug);
   },
 
   async getItems(shopId: string): Promise<MenuItem[]> {
@@ -186,11 +198,11 @@ export const menuService = {
     return result;
   },
 
-  async getMenuItems(shopId?: string): Promise<MenuItem[]> {
+  async getMenuItems(shopId?: string, shopSlug?: string): Promise<MenuItem[]> {
     if (!shopId) {
       return this.getStoredItems();
     }
-    return this.getShopMenu(shopId);
+    return this.getShopMenu(shopId, shopSlug);
   },
 
   async toggleAvailability(itemId: string, isAvailable: boolean): Promise<MenuItem | null> {
