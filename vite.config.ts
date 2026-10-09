@@ -1,11 +1,44 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+function upiqrpayApiPlugin(): Plugin {
+  return {
+    name: 'upiqrpay-api-plugin',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url && req.url.startsWith('/api/payment')) {
+          try {
+            const { handlePaymentRequest } = await import('./server/paymentHandler.ts');
+            const handled = await handlePaymentRequest(req, res);
+            if (handled) return;
+          } catch (err) {
+            console.error('[PaymentPlugin] Error handling request:', err);
+          }
+        }
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url && req.url.startsWith('/api/payment')) {
+          try {
+            const { handlePaymentRequest } = await import('./server/paymentHandler.ts');
+            const handled = await handlePaymentRequest(req, res);
+            if (handled) return;
+          } catch (err) {
+            console.error('[PaymentPlugin] Error handling preview request:', err);
+          }
+        }
+        next();
+      });
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), upiqrpayApiPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

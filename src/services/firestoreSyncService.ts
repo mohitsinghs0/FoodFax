@@ -54,6 +54,8 @@ export const notifyDatabaseOrderCommitted = (order: Order): void => {
 };
 
 export const MOCK_SHOP_IDS = new Set<string>([
+  'deepak-chinese-corner',
+  'shop-411159',
   'sharma-vada-pav',
   'college-canteen',
   'mumbai-snacks-corner',
@@ -66,6 +68,38 @@ export const MOCK_SHOP_IDS = new Set<string>([
   'ahmedabad-farsan-stall',
   'bengaluru-filter-coffee',
 ]);
+
+/**
+ * Checks whether a shop is suspended, inactive, or pending KYC approval.
+ * Suspended or unverified/pending KYC shops are hidden from the customer dashboard.
+ */
+export function isShopSuspendedOrKycPending(shop: any): boolean {
+  if (!shop) return false;
+
+  // 1. Explicit boolean suspension flag
+  if (shop.isSuspended === true || shop.is_suspended === true) {
+    return true;
+  }
+
+  // 2. Explicit active flag (false = suspended/deactivated)
+  if (shop.isActive === false || shop.is_active === false) {
+    return true;
+  }
+
+  // 3. Status string check
+  const status = String(shop.status || shop.shop_status || '').toLowerCase().trim();
+  if (['suspended', 'pending_kyc', 'kyc_pending', 'inactive', 'blocked', 'rejected'].includes(status)) {
+    return true;
+  }
+
+  // 4. KYC status check
+  const kycStatus = String(shop.kycStatus || shop.kyc_status || '').toLowerCase().trim();
+  if (['pending', 'in_review', 'under_review', 'submitted', 'rejected', 'unverified'].includes(kycStatus)) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * Normalizes a database row or legacy document into standard frontend Shop interface.
@@ -141,6 +175,14 @@ export function normalizeShopDoc(data: any): Shop {
     tableServiceAvailable: Boolean(data.table_service_available ?? data.tableServiceAvailable),
     featuredItem: data.featured_item || data.featuredItem || `${name} Special`,
     isDemo: Boolean(data.is_demo ?? data.isDemo),
+    isActive: data.is_active !== undefined ? Boolean(data.is_active) : (data.isActive !== undefined ? Boolean(data.isActive) : true),
+    isSuspended: Boolean(data.is_suspended ?? data.isSuspended),
+    kycStatus: data.kyc_status || data.kycStatus || (data.status === 'pending_kyc' ? 'pending' : 'approved'),
+    status: data.status || (Boolean(data.is_suspended ?? data.isSuspended) ? 'suspended' : 'active'),
+    upiqrpayApiKey: data.upiqrpay_api_key || data.upiqrpayApiKey,
+    upiqrpayWebhookSecret: data.upiqrpay_webhook_secret || data.upiqrpayWebhookSecret,
+    isOnlinePaymentEnabled: data.is_online_payment_enabled !== undefined ? Boolean(data.is_online_payment_enabled) : (data.isOnlinePaymentEnabled !== undefined ? Boolean(data.isOnlinePaymentEnabled) : true),
+    merchantProvider: data.merchant_provider || data.merchantProvider || 'bharatpe',
   };
 }
 
@@ -210,6 +252,21 @@ class SupabaseSyncService {
   private activeSyncCount = 0;
   private syncListeners = new Set<SyncListener>();
 
+  // In-memory caching & request deduplication for ultra-fast performance
+  private cachedShops: Shop[] | null = null;
+  private lastShopsFetchTime = 0;
+  private shopsInflightPromise: Promise<Shop[]> | null = null;
+  private readonly SHOPS_CACHE_TTL_MS = 25000; // 25 seconds TTL
+
+  private cachedCategories: ShopCategory[] | null = null;
+  private lastCategoriesFetchTime = 0;
+  private readonly CATEGORIES_CACHE_TTL_MS = 120000; // 2 minutes TTL
+
+  public invalidateShopsCache() {
+    this.cachedShops = null;
+    this.lastShopsFetchTime = 0;
+  }
+
   public subscribeSyncState(listener: SyncListener): () => void {
     this.syncListeners.add(listener);
     listener(this.activeSyncCount > 0);
@@ -238,6 +295,10 @@ class SupabaseSyncService {
 
   public async initializeDatabase(): Promise<void> {
     if (this.isInitialized || !isSupabaseConfigured) return;
+    if (typeof window !== 'undefined' && sessionStorage.getItem('foodflow_db_initialized')) {
+      this.isInitialized = true;
+      return;
+    }
     this.isInitialized = true;
     this.startSync();
 
@@ -259,6 +320,9 @@ class SupabaseSyncService {
             is_active: true,
           });
         }
+      }
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('foodflow_db_initialized', 'true');
       }
     } catch (err) {
       console.warn('[Supabase] Initialization note:', err);
@@ -405,10 +469,15 @@ class SupabaseSyncService {
         table_service_available: shop.tableServiceAvailable,
         categories: shop.categories,
         is_demo: shop.isDemo || false,
+        upiqrpay_api_key: shop.upiqrpayApiKey || null,
+        upiqrpay_webhook_secret: shop.upiqrpayWebhookSecret || null,
+        is_online_payment_enabled: shop.isOnlinePaymentEnabled !== false,
+        merchant_provider: shop.merchantProvider || 'bharatpe',
         updated_at: new Date().toISOString(),
       };
 
       await supabase.from('shops').upsert(dbShop);
+      this.invalidateShopsCache();
     } catch (err) {
       console.warn('[Supabase] Error creating shop:', err);
     } finally {
@@ -425,11 +494,17 @@ class SupabaseSyncService {
     this.startSync();
     try {
       const clean = String(shopIdOrSlug).trim();
-      const { data, error } = await supabase
+      const queryPromise = supabase
         .from('shops')
         .select('*')
         .or(`id.eq.${clean},slug.eq.${clean}`)
         .maybeSingle();
+
+      const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Query timed out') }), 3500)
+      );
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
       if (error || !data) return null;
       return normalizeShopDoc(data);
@@ -451,6 +526,7 @@ class SupabaseSyncService {
           console.warn('[Supabase] Delete shop error:', error);
         }
       }
+      this.invalidateShopsCache();
       return true;
     } catch (err) {
       console.warn('[Supabase] Exception in deleteShop:', err);
@@ -477,28 +553,72 @@ class SupabaseSyncService {
       return [];
     }
 
-    this.startSync();
-    try {
-      // Fetch strictly from Supabase shops table
-      const { data: remoteShops, error } = await supabase
-        .from('shops')
-        .select('*');
-
-      if (!error && remoteShops) {
-        // Return ONLY live shops present in the database without any mock/demo stalls!
-        const liveShops = remoteShops
-          .map((d) => normalizeShopDoc(d))
-          .filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id));
-        return liveShops;
-      }
-
-      return [];
-    } catch (err) {
-      console.warn('[Supabase] Error getting shops, using fallback:', err);
-      return [];
-    } finally {
-      this.endSync();
+    const now = Date.now();
+    // Return instant memory cache if fresh
+    if (this.cachedShops && (now - this.lastShopsFetchTime < this.SHOPS_CACHE_TTL_MS)) {
+      return this.cachedShops;
     }
+
+    // Coalesce in-flight queries so multiple components don't spam the network simultaneously
+    if (this.shopsInflightPromise) {
+      return this.shopsInflightPromise;
+    }
+
+    this.shopsInflightPromise = (async () => {
+      this.startSync();
+      try {
+        // Fetch strictly from Supabase shops table
+        const { data: remoteShops, error } = await supabase
+          .from('shops')
+          .select('*');
+
+        if (!error && remoteShops) {
+          // Return ONLY live shops present in the database without any mock/demo stalls!
+          const liveShops = remoteShops
+            .map((d) => normalizeShopDoc(d))
+            .filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+
+          this.cachedShops = liveShops;
+          this.lastShopsFetchTime = Date.now();
+
+          try {
+            localStorage.setItem('foodflow_shops', JSON.stringify(liveShops));
+          } catch {}
+
+          return liveShops;
+        }
+
+        if (this.cachedShops && this.cachedShops.length > 0) return this.cachedShops;
+        try {
+          const stored = localStorage.getItem('foodflow_shops') || localStorage.getItem('foodflow_shops_list');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed.filter((s: Shop) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+            }
+          }
+        } catch {}
+        return [];
+      } catch (err) {
+        console.warn('[Supabase] Error getting shops, using fallback:', err);
+        if (this.cachedShops && this.cachedShops.length > 0) return this.cachedShops;
+        try {
+          const stored = localStorage.getItem('foodflow_shops') || localStorage.getItem('foodflow_shops_list');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed.filter((s: Shop) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+            }
+          }
+        } catch {}
+        return [];
+      } finally {
+        this.shopsInflightPromise = null;
+        this.endSync();
+      }
+    })();
+
+    return this.shopsInflightPromise;
   }
 
   public async updateShop(shopId: string, updates: Partial<Shop>): Promise<void> {
@@ -521,6 +641,7 @@ class SupabaseSyncService {
       if (updates.openingHours !== undefined) dbUpdates.opening_hours = updates.openingHours;
 
       await supabase.from('shops').update(dbUpdates).eq('id', shopId);
+      this.invalidateShopsCache();
     } catch (err) {
       console.warn('[Supabase] Error updating shop:', err);
     } finally {
@@ -542,6 +663,7 @@ class SupabaseSyncService {
         description: category.description,
         is_active: true,
       });
+      this.cachedCategories = null;
     } catch (err) {
       console.warn('[Supabase] Error creating category:', err);
     } finally {
@@ -550,20 +672,34 @@ class SupabaseSyncService {
   }
 
   public async getCategories(): Promise<ShopCategory[]> {
+    const now = Date.now();
+    if (this.cachedCategories && (now - this.lastCategoriesFetchTime < this.CATEGORIES_CACHE_TTL_MS)) {
+      return this.cachedCategories;
+    }
+
     this.startSync();
     try {
-      const { data, error } = await supabase
+      const query = supabase
         .from('categories')
         .select('*')
         .order('display_order', { ascending: true });
 
+      const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Categories timed out') }), 3500)
+      );
+
+      const { data, error } = await Promise.race([query, timeoutPromise]);
+
       if (!error && data && data.length > 0) {
-        return data.map((d) => ({
+        const cats = data.map((d: any) => ({
           id: d.id,
           name: d.name,
           iconName: d.icon_name || 'Utensils',
           description: d.description,
         }));
+        this.cachedCategories = cats;
+        this.lastCategoriesFetchTime = Date.now();
+        return cats;
       }
       return MOCK_CATEGORIES;
     } catch (err) {
@@ -665,7 +801,10 @@ class SupabaseSyncService {
       if (shopId) {
         query = query.eq('shop_id', shopId);
       }
-      const { data, error } = await query;
+      const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error('Menu query timed out') }), 3500)
+      );
+      const { data, error } = await Promise.race([query, timeoutPromise]);
       const remoteList: MenuItem[] = (!error && data && data.length > 0)
         ? data.map(normalizeMenuItemDoc)
         : [];
@@ -926,6 +1065,93 @@ class SupabaseSyncService {
       });
     } catch (err) {
       console.warn('[Supabase] Error updating order status:', err);
+    } finally {
+      this.endSync();
+    }
+  }
+
+  // ============================================================
+  // 5b. PAYMENTS OPERATIONS
+  // ============================================================
+
+  public async getPaymentForOrder(orderId: string): Promise<PaymentRecord | null> {
+    if (!isSupabaseConfigured || !orderId) return null;
+    this.startSync();
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return null;
+
+      return {
+        id: data.id,
+        orderId: data.order_id,
+        shopId: data.shop_id,
+        customerId: data.customer_id,
+        currency: data.currency || 'INR',
+        paymentMode: data.payment_mode,
+        paymentStatus: data.payment_status,
+        amount: Number(data.amount || 0),
+        transactionId: data.transaction_id,
+        providerPaymentId: data.provider_payment_id,
+        providerOrderId: data.provider_order_id,
+        merchantRef: data.merchant_ref,
+        qrCodeData: data.qr_code_data,
+        upiIntentUrl: data.upi_intent_url,
+        utrNumber: data.utr_number,
+        provider: data.provider,
+        failureReason: data.failure_reason,
+        rawPayload: data.raw_payload,
+        paidAt: data.paid_at,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+    } catch (err) {
+      console.warn('[Supabase] Error getting payment record:', err);
+      return null;
+    } finally {
+      this.endSync();
+    }
+  }
+
+  public async savePaymentRecord(payment: Partial<PaymentRecord> & { orderId: string }): Promise<void> {
+    if (!isSupabaseConfigured || !payment.orderId) return;
+    this.startSync();
+    try {
+      const paymentId = payment.id || `pay-${payment.orderId}`;
+      const now = new Date().toISOString();
+
+      const dbPayment: any = {
+        id: paymentId,
+        order_id: payment.orderId,
+        payment_mode: payment.paymentMode || 'PAY_ONLINE',
+        payment_status: payment.paymentStatus || 'INITIATED',
+        amount: payment.amount ?? 0,
+        currency: payment.currency || 'INR',
+        updated_at: now,
+      };
+
+      if (payment.shopId) dbPayment.shop_id = payment.shopId;
+      if (payment.customerId) dbPayment.customer_id = payment.customerId;
+      if (payment.transactionId) dbPayment.transaction_id = payment.transactionId;
+      if (payment.providerPaymentId) dbPayment.provider_payment_id = payment.providerPaymentId;
+      if (payment.providerOrderId) dbPayment.provider_order_id = payment.providerOrderId;
+      if (payment.qrCodeData) dbPayment.qr_code_data = payment.qrCodeData;
+      if (payment.upiIntentUrl) dbPayment.upi_intent_url = payment.upiIntentUrl;
+      if (payment.utrNumber) dbPayment.utr_number = payment.utrNumber;
+      if (payment.provider) dbPayment.provider = payment.provider;
+      if (payment.failureReason) dbPayment.failure_reason = payment.failureReason;
+      if (payment.paidAt) dbPayment.paid_at = payment.paidAt;
+      if (payment.rawPayload) dbPayment.raw_payload = payment.rawPayload;
+
+      await supabase.from('payments').upsert(dbPayment);
+    } catch (err) {
+      console.warn('[Supabase] Error saving payment record:', err);
     } finally {
       this.endSync();
     }

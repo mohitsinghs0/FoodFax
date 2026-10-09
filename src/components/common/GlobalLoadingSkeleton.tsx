@@ -6,26 +6,12 @@ interface GlobalLoadingSkeletonProps {
 }
 
 export const GlobalLoadingSkeleton: React.FC<GlobalLoadingSkeletonProps> = ({ 
-  isSyncing, 
+  isSyncing: _isSyncing, 
   isInitialLoad = false 
 }) => {
   return (
     <>
-      {/* Top Floating Cloud Sync Pulse Indicator */}
-      <div 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 pointer-events-none ${
-          isSyncing ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full'
-        }`}
-      >
-        <div className="h-1 w-full bg-gradient-to-r from-orange-400 via-amber-500 to-orange-600 animate-pulse" />
-        <div className="bg-slate-900/90 backdrop-blur-md text-white text-[11px] font-semibold py-1 px-3 w-fit mx-auto rounded-b-lg shadow-md border-x border-b border-white/10 flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-          </span>
-          <span>Syncing with live data...</span>
-        </div>
-      </div>
+
 
       {/* Full Page Initial Skeletons if loading cold */}
       {isInitialLoad && (

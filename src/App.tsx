@@ -53,7 +53,7 @@ const AppContent: React.FC = () => {
   const { route } = useRouter();
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(false);
 
   React.useEffect(() => {
     // Subscribe to Supabase sync state (loading / active network fetches)
@@ -61,9 +61,9 @@ const AppContent: React.FC = () => {
       setIsSyncing(syncing);
     });
 
-    firestoreSync.initializeDatabase().finally(() => {
-      // Allow slight breather for perceived smooth transition
-      setTimeout(() => setIsInitialLoading(false), 500);
+    // Run database initialization in background without blocking initial paint
+    firestoreSync.initializeDatabase().catch((err) => {
+      console.warn('[App] Background DB init:', err);
     });
 
     return () => unsub();

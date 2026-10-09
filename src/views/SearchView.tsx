@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
-import { shopService } from '../services/shopService';
+import { shopService, isShopSuspendedOrKycPending } from '../services/shopService';
 import { menuService } from '../services/menuService';
 import { Shop, MenuItem, ShopCategory } from '../types';
 import { ShopCard } from '../components/shop/ShopCard';
@@ -18,12 +18,18 @@ export const SearchView: React.FC = () => {
   const initialQuery = route.params?.q || route.searchQuery || '';
   const [query, setQuery] = useState(initialQuery);
   const [categories, setCategories] = useState<ShopCategory[]>([]);
-  const [shops, setShops] = useState<Shop[]>([]);
+  const [shops, setShops] = useState<Shop[]>(() => {
+    try {
+      return shopService.getStoredShops(isRealUser);
+    } catch {
+      return [];
+    }
+  });
   const [menuItems, setMenuItems] = useState<{ item: MenuItem; shop: Shop }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [onlyVeg, setOnlyVeg] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'dishes' | 'shops'>('all');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -57,6 +63,7 @@ export const SearchView: React.FC = () => {
   // Filtered Shops
   const filteredShops = useMemo(() => {
     return shops.filter((s) => {
+      if (isShopSuspendedOrKycPending(s)) return false;
       const matchQuery =
         !normalizedQuery ||
         (s.name && s.name.toLowerCase().includes(normalizedQuery)) ||

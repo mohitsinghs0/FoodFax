@@ -411,7 +411,7 @@ export const orderService = {
       orderType: data.orderType,
       tableNumber: data.tableNumber,
       paymentMethod: data.paymentMethod,
-      paymentStatus: data.paymentMethod === 'PAY_ONLINE' ? 'PAID' : 'COLLECT_ON_DELIVERY',
+      paymentStatus: data.paymentMethod === 'PAY_ONLINE' ? 'INITIATED' : 'COLLECT_ON_DELIVERY',
       orderStatus: 'PENDING',
       items: data.items,
       subtotal: data.subtotal,

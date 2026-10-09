@@ -25,8 +25,14 @@ export const ShopsView: React.FC = () => {
     currentUser && !currentUser.isDemo && currentUser.id !== 'demo-customer-001' && currentUser.id !== 'demo-owner-001'
   );
 
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [shops, setShops] = useState<Shop[]>(() => {
+    try {
+      return shopService.getStoredShops(true);
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(false);
   const [selectedStallType, setSelectedStallType] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false);

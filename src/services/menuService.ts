@@ -5,86 +5,7 @@ import { firestoreSync, MOCK_SHOP_IDS } from './firestoreSyncService';
 const MENU_ITEMS_KEY = 'foodflow_menu_items';
 const CATEGORIES_KEY = 'foodflow_categories';
 
-const NAIGAON_STARTER_ITEMS: MenuItem[] = [
-  {
-    id: 'item-ng-01',
-    shopId: 'shop-411159',
-    categoryId: 'fast-food',
-    name: 'Special Veg Hakka Noodles',
-    description: 'Wok-tossed thin noodles with crunchy julienned cabbage, carrots, bell peppers, and scallions in light soya.',
-    price: 80,
-    image: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=600&q=80',
-    isAvailable: true,
-    isVeg: true,
-    preparationTimeMin: 8,
-    preparationMinutes: '5–8',
-  },
-  {
-    id: 'item-ng-02',
-    shopId: 'shop-411159',
-    categoryId: 'fast-food',
-    name: 'Veg Manchurian Dry',
-    description: 'Crispy vegetable dumplings tossed with ginger, garlic, green chillies, spring onions, and dark soy glaze.',
-    price: 90,
-    image: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&w=600&q=80',
-    isAvailable: true,
-    isVeg: true,
-    preparationTimeMin: 10,
-    preparationMinutes: '6–10',
-  },
-  {
-    id: 'item-ng-03',
-    shopId: 'shop-411159',
-    categoryId: 'fast-food',
-    name: 'Triple Schezwan Fried Rice',
-    description: 'Aromatic basmati rice tossed with fiery house-made Schezwan sauce, fried noodles, and savoury gravy bowl.',
-    price: 110,
-    image: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=600&q=80',
-    isAvailable: true,
-    isVeg: true,
-    preparationTimeMin: 12,
-    preparationMinutes: '7–12',
-  },
-  {
-    id: 'item-ng-04',
-    shopId: 'shop-411159',
-    categoryId: 'snacks',
-    name: 'Crispy Chinese Bhel',
-    description: 'Street-style fried noodles tossed with shredded cabbage, onions, capsicum, and spicy tangy schezwan chutney.',
-    price: 60,
-    image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80',
-    isAvailable: true,
-    isVeg: true,
-    preparationTimeMin: 5,
-    preparationMinutes: '3–5',
-  },
-  {
-    id: 'item-ng-05',
-    shopId: 'shop-411159',
-    categoryId: 'fast-food',
-    name: 'Paneer Chilli Dry',
-    description: 'Fresh soft cottage cheese cubes wok-fried with diced bell peppers, red onions, garlic, and hot chilli sauce.',
-    price: 120,
-    image: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=600&q=80',
-    isAvailable: true,
-    isVeg: true,
-    preparationTimeMin: 12,
-    preparationMinutes: '8–12',
-  },
-  {
-    id: 'item-ng-06',
-    shopId: 'shop-411159',
-    categoryId: 'snacks',
-    name: 'Steamed Veg Momos (6 Pcs)',
-    description: 'Delicate steamed dumplings stuffed with finely minced vegetables, served with authentic spicy red chutney.',
-    price: 70,
-    image: 'https://images.unsplash.com/photo-1625220194771-7ebdea0b70b9?auto=format&fit=crop&w=600&q=80',
-    isAvailable: true,
-    isVeg: true,
-    preparationTimeMin: 8,
-    preparationMinutes: '5–8',
-  },
-];
+
 
 export const menuService = {
   getStoredItems(): MenuItem[] {
@@ -96,7 +17,7 @@ export const menuService = {
     } catch {
       // fallback
     }
-    return [...MOCK_MENU_ITEMS, ...NAIGAON_STARTER_ITEMS];
+    return [...MOCK_MENU_ITEMS];
   },
 
   saveStoredItems(items: MenuItem[]): void {
@@ -148,19 +69,7 @@ export const menuService = {
       return matched;
     }
 
-    // 3. If specifically the Deepak Chinese Corner demo/seed stall, provide its starter items
-    if (lowerId === 'deepak-chinese-corner' || lowerId === 'shop-411159') {
-      const itemsForShop = NAIGAON_STARTER_ITEMS.map((item) => ({
-        ...item,
-        shopId: shopId,
-        isDemo: false,
-      }));
-      const updated = [...items, ...itemsForShop];
-      this.saveStoredItems(updated);
-      return itemsForShop;
-    }
-
-    // 4. Stalls return their registered live menu items
+    // 3. Stalls return their registered live menu items
     return [];
   },
 

@@ -55,6 +55,14 @@ export interface Shop {
   isRushHour?: boolean;
   featuredItem?: string;
   isDemo?: boolean;
+  isActive?: boolean;
+  isSuspended?: boolean;
+  kycStatus?: 'pending' | 'verified' | 'approved' | 'rejected' | 'in_review' | string;
+  status?: 'active' | 'suspended' | 'pending_kyc' | 'inactive' | 'blocked' | string;
+  upiqrpayApiKey?: string;
+  upiqrpayWebhookSecret?: string;
+  isOnlinePaymentEnabled?: boolean;
+  merchantProvider?: string;
 }
 
 export interface MenuItem {
@@ -91,7 +99,16 @@ export type OrderType = 'TAKEAWAY' | 'DINE_IN';
 export type PaymentMethod = 'CASH_AT_COUNTER' | 'PAY_ONLINE';
 export type PaymentMode = PaymentMethod;
 
-export type PaymentStatus = 'PENDING' | 'PAID' | 'COLLECT_ON_DELIVERY' | 'REFUNDED' | 'FAILED';
+export type PaymentStatus = 
+  | 'PENDING' 
+  | 'INITIATED' 
+  | 'PROCESSING' 
+  | 'PAID' 
+  | 'FAILED' 
+  | 'CANCELLED' 
+  | 'EXPIRED' 
+  | 'REFUNDED' 
+  | 'COLLECT_ON_DELIVERY';
 
 export type OrderStatus = 
   | 'PENDING'
@@ -309,14 +326,45 @@ export interface OrderStatusHistory {
 export interface PaymentRecord {
   id: string;
   orderId: string;
+  shopId?: string;
+  customerId?: string;
+  currency?: string;
   paymentMode: 'cash' | 'upi' | 'card' | PaymentMethod;
   paymentStatus: PaymentStatus;
   amount: number;
   transactionId?: string;
+  providerPaymentId?: string;
+  providerOrderId?: string;
+  merchantRef?: string;
+  qrCodeData?: string;
+  upiIntentUrl?: string;
+  utrNumber?: string;
   provider?: string;
+  failureReason?: string;
+  rawPayload?: any;
   paidAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UPIQRPayCreateResponse {
+  paymentId: string;
+  amount: number;
+  orderId: string;
+  qrCode: string; // Base64 data URI
+  upiLink: string; // upi://pay?...
+  payUrl?: string;
+  expiresAt: string;
+  status: string;
+}
+
+export interface UPIQRPayStatusResponse {
+  paymentId: string;
+  orderId: string;
+  amount: number;
+  status: 'pending' | 'success' | 'expired' | 'cancelled' | 'PAID' | string;
+  utrNumber?: string;
+  paidAt?: string;
 }
 
 export interface FavoriteShopRecord {

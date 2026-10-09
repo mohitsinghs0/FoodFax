@@ -10,41 +10,45 @@ const SAVED_SHOPS_KEY = 'foodflow_saved_shops';
 const REVIEWS_STORAGE_KEY = 'foodflow_shop_reviews';
 const IN_MEMORY_REVIEWS: ShopReview[] = [];
 
+let memoryStoredShopsCache: Shop[] | null = null;
+
 const SHOP_LISTENERS = new Map<string, Set<(shop: Shop) => void>>();
 const ALL_SHOPS_LISTENERS = new Set<(shops: Shop[]) => void>();
 
 // Verified authentic registered stall seed for live users
-export const INITIAL_REAL_SHOPS: Shop[] = [
-  {
-    id: 'shop-411159',
-    slug: 'deepak-chinese-corner',
-    name: 'Deepak Chinese Corner',
-    stallType: 'Fast Food Counter',
-    tagline: 'Wok tossed Hakka Noodles & Manchurian since 2012',
-    description: 'Hot sizzling Chinese street wok delicacies cooked fresh to order at Station Road, Naigaon East.',
-    image: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=800&q=80',
-    bannerImage: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=1200&q=80',
-    latitude: 19.3515,
-    longitude: 72.8525,
-    location: {
-      address: 'Shop No. 4, Station Road, Naigaon East',
-      landmark: 'Near Railway Station Platform 1 Exit',
-      distanceKm: 0.2,
-      latitude: 19.3515,
-      longitude: 72.8525,
-    },
-    isOpen: true,
-    openingHours: '11:30 AM – 11:00 PM',
-    rating: 4.8,
-    totalReviews: 24,
-    categories: ['fast-food', 'snacks'],
-    preparationTimeMinutes: '7–12',
-    isPureVeg: true,
-    tableServiceAvailable: false,
-    featuredItem: 'Veg Schezwan Fried Rice & Manchurian Combo',
-    isDemo: false,
-  },
-];
+export const INITIAL_REAL_SHOPS: Shop[] = [];
+
+/**
+ * Checks whether a shop is suspended, inactive, or pending KYC approval.
+ * Suspended or unverified/pending KYC shops are hidden from the customer dashboard.
+ */
+export function isShopSuspendedOrKycPending(shop: any): boolean {
+  if (!shop) return false;
+
+  // 1. Explicit boolean suspension flag
+  if (shop.isSuspended === true || shop.is_suspended === true) {
+    return true;
+  }
+
+  // 2. Explicit active flag (false = suspended/deactivated)
+  if (shop.isActive === false || shop.is_active === false) {
+    return true;
+  }
+
+  // 3. Status string check
+  const status = String(shop.status || shop.shop_status || '').toLowerCase().trim();
+  if (['suspended', 'pending_kyc', 'kyc_pending', 'inactive', 'blocked', 'rejected'].includes(status)) {
+    return true;
+  }
+
+  // 4. KYC status check
+  const kycStatus = String(shop.kycStatus || shop.kyc_status || '').toLowerCase().trim();
+  if (['pending', 'in_review', 'under_review', 'submitted', 'rejected', 'unverified'].includes(kycStatus)) {
+    return true;
+  }
+
+  return false;
+}
 
 export const shopService = {
   isRealUserCheck(override?: boolean): boolean {
@@ -64,42 +68,51 @@ export const shopService = {
   },
 
   getStoredShops(isRealUser?: boolean): Shop[] {
+    if (memoryStoredShopsCache) {
+      return memoryStoredShopsCache;
+    }
+
     const deletedRaw = typeof window !== 'undefined' ? localStorage.getItem('foodflow_deleted_shops') : null;
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
 
     try {
-      const stored = localStorage.getItem(SHOPS_STORAGE_KEY);
+      const stored = localStorage.getItem(SHOPS_STORAGE_KEY) || localStorage.getItem('foodflow_shops');
       if (stored) {
         const parsed: Shop[] = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const map = new Map<string, Shop>();
-          // Custom / registered stalls from local storage (must have valid id and name, never demo, never deleted)
+          // Custom / registered stalls from local storage (must have valid id and name, never demo, never deleted, never suspended/kyc-pending)
           parsed.forEach((s) => {
-            if (s && s.id && s.name && !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !map.has(s.id)) {
+            if (
+              s && 
+              s.id && 
+              s.name && 
+              !s.isDemo && 
+              !MOCK_SHOP_IDS.has(s.id) && 
+              s.id !== 'shop-411159' && 
+              s.slug !== 'deepak-chinese-corner' && 
+              !deletedSet.has(s.id) && 
+              !isShopSuspendedOrKycPending(s) && 
+              !map.has(s.id)
+            ) {
               map.set(s.id, s);
             }
           });
-          INITIAL_REAL_SHOPS.forEach((s) => {
-            if (!s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !map.has(s.id)) {
-              map.set(s.id, s);
-            }
-          });
-          return Array.from(map.values());
+
+          const cleanList = Array.from(map.values());
+          memoryStoredShopsCache = cleanList;
+          return cleanList;
         }
       }
     } catch {
       // fallback
     }
-    const map = new Map<string, Shop>();
-    INITIAL_REAL_SHOPS.forEach((s) => {
-      if (!s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !map.has(s.id)) {
-        map.set(s.id, s);
-      }
-    });
-    return Array.from(map.values());
+
+    return [];
   },
 
   saveStoredShops(shops: Shop[]): void {
+    memoryStoredShopsCache = shops;
     try {
       localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(shops));
     } catch {
@@ -188,15 +201,14 @@ export const shopService = {
     try {
       // Fetch shops from database
       const remoteShops = await firestoreSync.getShops(isRealUser);
-      if (isSupabaseConfigured) {
-        // If Supabase is configured, use strictly the remote live shops returned from database
-        // If a stall is removed from database, it will also be removed from the UI dashboard
-        shops = remoteShops.filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id));
-      } else {
-        shops = this.getStoredShops(isRealUser).filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id));
+      if (isSupabaseConfigured && remoteShops && remoteShops.length > 0) {
+        shops = remoteShops.filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+      }
+      if (shops.length === 0) {
+        shops = this.getStoredShops(isRealUser).filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
       }
     } catch {
-      shops = this.getStoredShops(isRealUser).filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id));
+      shops = this.getStoredShops(isRealUser).filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
     }
 
     const loc = userLocation || DEFAULT_CUSTOMER_LOCATION;
@@ -217,6 +229,9 @@ export const shopService = {
       }
       return s;
     });
+
+    // Strictly filter out any suspended or pending KYC stalls
+    shops = shops.filter((s) => !isShopSuspendedOrKycPending(s));
 
     // Sort by nearest distance first
     shops.sort((a, b) => (a.location?.distanceKm ?? 999) - (b.location?.distanceKm ?? 999));
@@ -269,13 +284,11 @@ export const shopService = {
     if (isSupabaseConfigured) {
       try {
         const remoteShop = await firestoreSync.getShop(cleanId);
-        if (remoteShop && !remoteShop.isDemo && !MOCK_SHOP_IDS.has(remoteShop.id) && !deletedSet.has(remoteShop.id)) {
+        if (remoteShop && !remoteShop.isDemo && !MOCK_SHOP_IDS.has(remoteShop.id) && !deletedSet.has(remoteShop.id) && !isShopSuspendedOrKycPending(remoteShop)) {
           return remoteShop;
         }
-        // If Supabase is configured and not in database, stall was removed or does not exist
-        return null;
-      } catch {
-        return null;
+      } catch (err) {
+        console.warn('[shopService] Remote getShop error, falling back to local:', err);
       }
     }
 
@@ -287,7 +300,7 @@ export const shopService = {
         (s.slug && s.slug.toLowerCase() === cleanId) ||
         (s.name && s.name.toLowerCase() === cleanId)
     );
-    if (found && !deletedSet.has(found.id) && !MOCK_SHOP_IDS.has(found.id)) return found;
+    if (found && !deletedSet.has(found.id) && !MOCK_SHOP_IDS.has(found.id) && !isShopSuspendedOrKycPending(found)) return found;
 
     // 3. Match stripped alphanumeric characters
     const cleanAlpha = cleanId.replace(/[^a-z0-9]/g, '');

@@ -51,8 +51,37 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Safety fallback: Never keep user stuck on loading spinner for more than 3 seconds
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }, 3000);
+
     const loadShopData = async () => {
-      setLoading(true);
+      // 1. Instant optimistic check: check local stored shops for instant rendering (0ms)
+      try {
+        const localShops = shopService.getStoredShops();
+        const cleanTargetId = String(shopId || '').toLowerCase().trim();
+        const instantFound = localShops.find(
+          (s) => (s.id && s.id.toLowerCase() === cleanTargetId) || (s.slug && s.slug.toLowerCase() === cleanTargetId)
+        );
+        if (instantFound && isMounted) {
+          setShop(instantFound);
+          const cachedMenu = menuService.getStoredItems().filter(
+            (i) => (i.shopId && i.shopId.toLowerCase() === instantFound.id.toLowerCase()) || (instantFound.slug && i.shopId.toLowerCase() === instantFound.slug.toLowerCase())
+          );
+          if (cachedMenu.length > 0) {
+            setMenuItems(cachedMenu);
+          }
+          setCategories(menuService.getStoredCategories());
+          setIsSaved(shopService.isShopSaved(instantFound.id));
+          setLoading(false); // Render immediately without waiting!
+        }
+      } catch {}
+
+      // 2. Fetch fresh remote data with timeout
       try {
         let foundShop = await shopService.getShop(shopId);
         if (!foundShop) {
@@ -90,9 +119,12 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
         }
       }
     };
+
     loadShopData();
+
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
     };
   }, [shopId]);
 
@@ -168,29 +200,15 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
     return (
       <div className="py-16 px-4 max-w-md mx-auto text-center bg-white rounded-3xl border border-slate-200 mt-6 p-8 shadow-xs">
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-        <h2 className="text-lg font-bold text-slate-900 mb-1">Stall Not Found</h2>
+        <h2 className="text-lg font-bold text-slate-900 mb-1">Stall Not Available</h2>
         <p className="text-xs text-slate-500 mb-6">
-          The stall you are looking for might have closed or moved. Select a popular food counter below:
+          The stall you are looking for might be temporarily unavailable or closed.
         </p>
-        <div className="flex flex-col gap-2 mb-4">
-          <button
-            onClick={() => navigate('/shop/sharma-vada-pav')}
-            className="w-full py-2.5 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs border border-orange-200 transition-colors"
-          >
-            🍔 Sharma Vada Pav (Special Cheese Vada Pav)
-          </button>
-          <button
-            onClick={() => navigate('/shop/college-canteen')}
-            className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 transition-colors"
-          >
-            🍜 College Canteen (Double Masala Maggi)
-          </button>
-        </div>
         <button
           onClick={() => navigate('/')}
-          className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+          className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
         >
-          Browse All Stalls
+          Explore Nearby Food Spots
         </button>
       </div>
     );
