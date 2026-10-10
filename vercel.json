@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/payment/status/:paymentId",
+      "destination": "/api/payment/status?payment_id=:paymentId"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+

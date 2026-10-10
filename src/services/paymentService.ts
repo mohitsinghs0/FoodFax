@@ -72,9 +72,14 @@ export const paymentService = {
   /**
    * Polls payment verification status from backend & UPIQRPay
    */
-  async checkPaymentStatus(paymentId: string): Promise<{ success: boolean; data?: UPIQRPayStatusResponse; message?: string }> {
+  async checkPaymentStatus(
+    paymentId: string,
+    shopId?: string
+  ): Promise<{ success: boolean; data?: UPIQRPayStatusResponse; message?: string }> {
     try {
-      const response = await fetch(`/api/payment/status/${paymentId}`, {
+      const qs = new URLSearchParams({ payment_id: paymentId });
+      if (shopId) qs.set('shop_id', shopId);
+      const response = await fetch(`/api/payment/status?${qs.toString()}`, {
         method: 'GET',
       });
       const json = await response.json();

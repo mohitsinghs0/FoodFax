@@ -41,24 +41,19 @@ export const CheckoutView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [shopDetails, setShopDetails] = useState<Shop | null>(null);
 
-  // UPI Payment Gateway Modal State
+  // UPI Payment Gateway Modal State (UPIQRPay Connected to BharatPe Business)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [upiData, setUpiData] = useState<UPIQRPayCreateResponse | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<
-    'WAITING' | 'VERIFYING_WITH_STALL' | 'PAID' | 'REJECTED' | 'EXPIRED'
-  >('WAITING');
+  const [paymentStatus, setPaymentStatus] = useState<'WAITING' | 'PAID' | 'REJECTED' | 'EXPIRED'>('WAITING');
   const [paymentUtr, setPaymentUtr] = useState<string | null>(null);
   const [paymentCountdown, setPaymentCountdown] = useState<number>(300); // 5 minutes
   const [isVerifying, setIsVerifying] = useState(false);
   const [merchantNotice, setMerchantNotice] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string>('');
-  const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
-  const [submittedTokenNumber, setSubmittedTokenNumber] = useState<string | null>(null);
-  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
-  const [manualUtrInput, setManualUtrInput] = useState('');
-  const [utrError, setUtrError] = useState<string | null>(null);
+  const [statusCheckMsg, setStatusCheckMsg] = useState<string | null>(null);
 
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isCommittingRef = useRef<boolean>(false);
 
   // Guard: if unauthenticated, redirect to login with return to /checkout
   useEffect(() => {
@@ -84,8 +79,7 @@ export const CheckoutView: React.FC = () => {
       shopService.getShop(shopId).then((s) => {
         if (s) {
           setShopDetails(s);
-          // Auto-switch to cash if this shop has no UPI ID registered
-          if (!s.upiId?.trim()) {
+          if (s.isOnlinePaymentEnabled === false) {
             setPaymentMethod('CASH_AT_COUNTER');
           }
         }
@@ -93,7 +87,7 @@ export const CheckoutView: React.FC = () => {
     }
   }, [shopId]);
 
-  // Payment Countdown Timer & Gateway / Stall Verification Polling Listener
+  // Payment Countdown Timer & Automatic UPIQRPay Gateway Polling Listener
   useEffect(() => {
     if (!isPaymentModalOpen || paymentStatus === 'PAID' || paymentStatus === 'REJECTED') {
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
@@ -114,65 +108,31 @@ export const CheckoutView: React.FC = () => {
       }, 1000);
     }
 
-    // 1. Poll UPIQRPay Gateway if dynamic merchant QR is active
+    // Automatically poll UPIQRPay Gateway every 2 seconds for bank confirmation
     const pollInterval = setInterval(async () => {
-      if (upiData?.paymentId && paymentStatus === 'WAITING') {
+      if (upiData?.paymentId && paymentStatus === 'WAITING' && !isCommittingRef.current) {
         try {
-          const res = await paymentService.checkPaymentStatus(upiData.paymentId);
-          // Only trigger automatic PAID if official gateway API returns PAID + UTR
-          if (res?.data?.status === 'PAID' && res?.data?.utrNumber) {
-            await handleGatewayConfirmedPayment(res.data.utrNumber);
+          const res = await paymentService.checkPaymentStatus(upiData.paymentId, shopId || undefined);
+          const statusUpper = String(res?.data?.status || '').toUpperCase();
+          if (statusUpper === 'PAID' || statusUpper === 'SUCCESS') {
+            clearInterval(pollInterval);
+            await handleGatewayConfirmedPayment(res?.data?.utrNumber || upiData.paymentId);
+          } else if (statusUpper === 'EXPIRED' || statusUpper === 'CANCELLED') {
+            setPaymentStatus('EXPIRED');
             clearInterval(pollInterval);
           }
         } catch {}
       }
+    }, 2000);
 
-      // 2. Poll order status when waiting for Stall Owner to verify submitted UTR
-      if (submittedOrderId && paymentStatus === 'VERIFYING_WITH_STALL') {
-        try {
-          const updatedOrder = await orderService.getOrder(submittedOrderId);
-          if (updatedOrder) {
-            if (updatedOrder.paymentStatus === 'PAID') {
-              setPaymentStatus('PAID');
-              clearInterval(pollInterval);
-              setTimeout(() => {
-                setIsPaymentModalOpen(false);
-                navigate(`/order/${updatedOrder.id}`);
-              }, 1400);
-            } else if (
-              updatedOrder.paymentStatus === 'FAILED' ||
-              updatedOrder.orderStatus === 'CANCELLED'
-            ) {
-              setRejectionReason(
-                updatedOrder.cancellationReason ||
-                  'Stall owner rejected this UTR because payment was not received in their bank account.'
-              );
-              setPaymentStatus('REJECTED');
-              clearInterval(pollInterval);
-            }
-          }
-        } catch {}
-      }
-    }, 2500);
-
-    // 3. Realtime subscription for instant Stall Owner approval/rejection
+    // Realtime subscription for webhook updates on public.payments / public.orders
     let unsubscribeRealtime: (() => void) | undefined;
-    if (submittedOrderId && paymentStatus === 'VERIFYING_WITH_STALL') {
+    if (pendingOrderId && paymentStatus === 'WAITING') {
       unsubscribeRealtime = paymentService.subscribeToPaymentUpdates(
-        submittedOrderId,
-        (newStatus, utr) => {
-          if (newStatus === 'PAID') {
-            if (utr) setPaymentUtr(utr);
-            setPaymentStatus('PAID');
-            setTimeout(() => {
-              setIsPaymentModalOpen(false);
-              navigate(`/order/${submittedOrderId}`);
-            }, 1400);
-          } else if (newStatus === 'FAILED' || newStatus === 'CANCELLED') {
-            setRejectionReason(
-              'Stall owner rejected this UTR because payment was not received in their UPI bank account.'
-            );
-            setPaymentStatus('REJECTED');
+        pendingOrderId,
+        async (newStatus, utr) => {
+          if (newStatus === 'PAID' && !isCommittingRef.current) {
+            await handleGatewayConfirmedPayment(utr || upiData?.paymentId || 'UPI-VERIFIED');
           }
         }
       );
@@ -183,7 +143,7 @@ export const CheckoutView: React.FC = () => {
       clearInterval(pollInterval);
       if (unsubscribeRealtime) unsubscribeRealtime();
     };
-  }, [isPaymentModalOpen, upiData?.paymentId, paymentStatus, submittedOrderId, navigate]);
+  }, [isPaymentModalOpen, upiData?.paymentId, paymentStatus, pendingOrderId, shopId, navigate]);
 
   if (isLoading && !currentUser) {
     return (
@@ -211,10 +171,9 @@ export const CheckoutView: React.FC = () => {
 
   const grandTotal = subtotal;
 
-  // Derived UPI Intent link & QR code image
-  // shopUpiVpa is ONLY set when the shop owner has a registered UPI ID in the database
+  // Online UPI is enabled via UPIQRPay (connected to BharatPe Business) or shop's UPI ID
   const shopUpiVpa: string | null = shopDetails?.upiId?.trim() || null;
-  const shopHasUpi = Boolean(shopUpiVpa);
+  const shopHasUpi = shopDetails ? shopDetails.isOnlinePaymentEnabled !== false : true;
 
   const directUpiUri = shopUpiVpa
     ? `upi://pay?pa=${encodeURIComponent(shopUpiVpa)}&pn=${encodeURIComponent(shopName || 'FoodFax Stall')}&am=${grandTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent('Token Order ' + (pendingOrderId || 'FoodFax'))}`
@@ -225,6 +184,30 @@ export const CheckoutView: React.FC = () => {
 
   const activeQrCodeUrl = upiData?.qrCode || directQrImageUrl;
   const activeUpiLink = upiData?.upiLink || directUpiUri;
+
+  /**
+   * Builds app-specific deep links for Google Pay, PhonePe, Paytm, or generic UPI
+   * using the dynamic UPIQRPay intent link so the BharatPe tracking reference is preserved.
+   */
+  const getUpiAppHref = (app: 'gpay' | 'phonepe' | 'paytm' | 'bhim'): string => {
+    const baseLink = activeUpiLink;
+    if (!baseLink) return upiData?.payUrl || '#';
+    const queryIdx = baseLink.indexOf('?');
+    const query = queryIdx !== -1 ? baseLink.slice(queryIdx + 1) : '';
+    const isMobile =
+      typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (!isMobile && upiData?.payUrl) {
+      return upiData.payUrl;
+    }
+
+    if (query) {
+      if (app === 'gpay') return `tez://upi/pay?${query}`;
+      if (app === 'phonepe') return `phonepe://pay?${query}`;
+      if (app === 'paytm') return `paytmmp://pay?${query}`;
+    }
+    return baseLink;
+  };
 
   const validateOrderInputs = () => {
     if (!isAuthenticated || !currentUser) {
@@ -248,13 +231,14 @@ export const CheckoutView: React.FC = () => {
   };
 
   /**
-   * Called when customer clicks "Generate Order Token" or "Pay with UPI"
+   * Called when customer clicks "Pay with UPI" or "Place Order with Cash"
    */
   const handlePlaceOrder = async () => {
     if (!validateOrderInputs()) return;
 
     setErrorMessage(null);
     setMerchantNotice(null);
+    setStatusCheckMsg(null);
 
     // If Cash at Counter: Immediately commit order and route to live tracker
     if (paymentMethod === 'CASH_AT_COUNTER') {
@@ -297,21 +281,17 @@ export const CheckoutView: React.FC = () => {
       return;
     }
 
-    // IF PAY ONLINE (UPI Dynamic QR):
+    // IF PAY ONLINE (UPIQRPay Dynamic Gateway):
     const orderRef = `ord-${Date.now().toString().slice(-6)}`;
+    isCommittingRef.current = false;
     setPendingOrderId(orderRef);
-    setSubmittedOrderId(null);
-    setSubmittedTokenNumber(null);
-    setRejectionReason(null);
-    setManualUtrInput('');
-    setUtrError(null);
+    setUpiData(null);
     setPaymentStatus('WAITING');
     setPaymentUtr(null);
     setIsPaymentModalOpen(true);
     setIsSubmitting(true);
 
     try {
-      // Call backend /api/payment/create-order to fetch dynamic UPIQRPay QR if configured
       const upiResult = await paymentService.createUpiOrder({
         orderId: orderRef,
         customerPhone: customerPhone.trim(),
@@ -325,13 +305,13 @@ export const CheckoutView: React.FC = () => {
       } else {
         setUpiData(null);
         setMerchantNotice(
-          `Direct UPI QR active for ${shopUpiVpa}. After paying, enter your 12-digit UPI UTR below for stall verification.`
+          upiResult.message || 'Could not initialize UPIQRPay gateway. Please try again or pay at counter.'
         );
       }
-    } catch {
+    } catch (err: any) {
       setUpiData(null);
       setMerchantNotice(
-        `Direct UPI QR active for ${shopUpiVpa}. After paying, enter your 12-digit UPI UTR below for stall verification.`
+        err?.message || 'Unable to connect to UPIQRPay gateway. Please check your connection.'
       );
     } finally {
       setIsSubmitting(false);
@@ -339,9 +319,11 @@ export const CheckoutView: React.FC = () => {
   };
 
   /**
-   * Called ONLY when official UPIQRPay gateway server confirms payment via bank webhook/status API
+   * Called automatically when UPIQRPay gateway confirms payment via bank status/webhook
    */
   const handleGatewayConfirmedPayment = async (utrString: string) => {
+    if (isCommittingRef.current) return;
+    isCommittingRef.current = true;
     setIsVerifying(true);
     setPaymentStatus('PAID');
     setPaymentUtr(utrString);
@@ -380,9 +362,10 @@ export const CheckoutView: React.FC = () => {
       setTimeout(() => {
         setIsPaymentModalOpen(false);
         navigate(`/order/${newOrder.id}`);
-      }, 1500);
+      }, 1400);
     } catch (err: any) {
       console.error('Error committing gateway verified order:', err);
+      isCommittingRef.current = false;
       setErrorMessage(err?.message || 'Error confirming order. Please contact counter staff.');
     } finally {
       setIsVerifying(false);
@@ -390,73 +373,24 @@ export const CheckoutView: React.FC = () => {
   };
 
   /**
-   * Strictly validates customer's 12-digit UPI UTR / RRN, blocks fake/duplicate UTRs,
-   * and submits order with paymentStatus='PENDING' so the Shop Owner MUST verify it before PAID.
+   * Manual one-click status check (no UTR input required!) — polls UPIQRPay server immediately
    */
-  const handleUtrSubmit = async () => {
-    setUtrError(null);
+  const handleCheckPaymentNow = async () => {
+    if (!upiData?.paymentId) return;
     setIsVerifying(true);
-
+    setStatusCheckMsg(null);
     try {
-      const verification = await paymentService.verifyAndValidateUtr({
-        utrNumber: manualUtrInput,
-        orderId: pendingOrderId,
-        paymentId: upiData?.paymentId,
-      });
-
-      if (!verification.valid) {
-        setUtrError(verification.error || 'Invalid 12-digit UPI UTR number.');
-        setIsVerifying(false);
-        return;
+      const res = await paymentService.checkPaymentStatus(upiData.paymentId, shopId || undefined);
+      const statusUpper = String(res?.data?.status || '').toUpperCase();
+      if (statusUpper === 'PAID' || statusUpper === 'SUCCESS') {
+        await handleGatewayConfirmedPayment(res?.data?.utrNumber || upiData.paymentId);
+      } else {
+        setStatusCheckMsg(
+          'Waiting for payment confirmation from bank... Complete payment in GPay / PhonePe / Paytm and it will auto-verify within 2–3 seconds.'
+        );
       }
-
-      const cleanedUtr = verification.cleanedUtr;
-      setPaymentUtr(cleanedUtr);
-
-      // If official UPIQRPay gateway confirmed this UTR on the server, mark PAID immediately
-      if (verification.verifiedByGateway) {
-        await handleGatewayConfirmedPayment(cleanedUtr);
-        return;
-      }
-
-      // Direct UPI Mode: NEVER mark as PAID automatically!
-      // Save order as paymentStatus='PENDING' (Unverified UPI) and wait for Stall Owner confirmation.
-      const orderItems = items.map(({ menuItem, quantity }) => ({
-        id: `item-${Date.now()}-${menuItem.id}`,
-        menuItemId: menuItem.id,
-        name: menuItem.name,
-        price: menuItem.price,
-        quantity,
-        isVeg: menuItem.isVeg,
-      }));
-
-      const newOrder = await commitOrderAndClearCart({
-        id: pendingOrderId || undefined,
-        shopId: shopId!,
-        shopName: shopName || 'Food Stall',
-        shopImage: shopImage || undefined,
-        shopLocation: shopDetails?.location?.address || shopDetails?.location?.landmark || 'Counter Stall',
-        customerId: currentUser?.id,
-        customerName: customerName.trim() || currentUser?.fullName || currentUser?.name || 'FoodFax Customer',
-        customerPhone: customerPhone.trim() || currentUser?.phone || '',
-        orderType,
-        tableNumber: orderType === 'DINE_IN' ? tableNumber.trim() : undefined,
-        paymentMethod: 'PAY_ONLINE',
-        paymentStatus: 'PENDING',
-        utrNumber: cleanedUtr,
-        items: orderItems,
-        subtotal,
-        total: grandTotal,
-        estimatedPreparationMinutes: '5-10',
-        instructions: instructions.trim() || undefined,
-      });
-
-      setSubmittedOrderId(newOrder.id);
-      setSubmittedTokenNumber(newOrder.tokenNumber);
-      setPaymentStatus('VERIFYING_WITH_STALL');
-    } catch (err: any) {
-      console.error('Error submitting UTR for verification:', err);
-      setUtrError(err?.message || 'Could not submit UTR for verification. Please try again.');
+    } catch {
+      setStatusCheckMsg('Checking with UPI gateway... Please wait a moment.');
     } finally {
       setIsVerifying(false);
     }
@@ -768,120 +702,64 @@ export const CheckoutView: React.FC = () => {
               </button>
             </div>
 
-            {/* 1. PAID / VERIFIED SCREEN (Only shown after Gateway Webhook OR Stall Owner Approval) */}
+            {/* 1. PAID / VERIFIED SCREEN (Shown automatically when UPIQRPay confirms payment) */}
             {paymentStatus === 'PAID' ? (
               <div className="py-6 text-center space-y-3 animate-in zoom-in-95 duration-200">
                 <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-emerald-700">Payment Verified!</h4>
+                  <h4 className="text-base font-black text-emerald-700">Payment Verified Automatically!</h4>
                   <p className="text-xs text-slate-600 mt-1 font-mono">
-                    {paymentUtr ? `Verified Bank UTR: ${paymentUtr}` : 'Payment confirmed by bank'}
+                    {paymentUtr ? `Bank Reference / UTR: ${paymentUtr}` : 'Confirmed via UPIQRPay Gateway'}
                   </p>
                 </div>
                 <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
-                  Order token confirmed! Redirecting to live order tracker...
+                  Order token generated! Redirecting to live order tracker...
                 </div>
               </div>
-            ) : paymentStatus === 'VERIFYING_WITH_STALL' ? (
-              /* 2. WAITING FOR STALL OWNER TO VERIFY UTR IN THEIR BANK / GPAY */
-              <div className="py-5 text-center space-y-3.5 animate-in fade-in duration-200">
-                <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-xs relative">
-                  <ShieldCheck className="w-8 h-8" />
-                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500" />
-                  </span>
-                </div>
-
-                <div>
-                  <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 mb-1">
-                    Verification Pending • Token {submittedTokenNumber || ''}
-                  </span>
-                  <h4 className="text-base font-black text-slate-900">
-                    Waiting for Stall Owner to Verify UTR
-                  </h4>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    We sent your 12-digit UTR to <strong>{shopName}</strong>. The stall owner will verify{' '}
-                    <strong>₹{grandTotal}</strong> in their UPI app ({shopUpiVpa}) before marking your order as paid.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Submitted 12-Digit UTR:</span>
-                    <span className="font-mono font-black text-slate-900">{paymentUtr}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Match Last 4 Digits:</span>
-                    <span className="font-mono font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
-                      {paymentUtr?.slice(-4)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Payment Status:</span>
-                    <span className="font-bold text-amber-700">Awaiting Stall Confirmation...</span>
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium text-left flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Anti-Fraud Active:</strong> Orders with fake or unreceived UTR numbers are automatically rejected by the stall terminal.
-                  </span>
-                </div>
-
-                {submittedOrderId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsPaymentModalOpen(false);
-                      navigate(`/order/${submittedOrderId}`);
-                    }}
-                    className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
-                  >
-                    Open Live Order Tracker (While Stall Verifies)
-                  </button>
-                )}
-              </div>
-            ) : paymentStatus === 'REJECTED' ? (
-              /* 3. REJECTED SCREEN (Fake UTR / Money Not Received by Stall Owner) */
+            ) : paymentStatus === 'EXPIRED' ? (
+              /* 2. EXPIRED SCREEN */
               <div className="py-5 text-center space-y-3.5 animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-                  <AlertTriangle className="w-9 h-9" />
+                <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+                  <Clock className="w-9 h-9" />
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-rose-700">Payment Verification Failed!</h4>
+                  <h4 className="text-base font-black text-amber-800">Payment Session Expired</h4>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    {rejectionReason ||
-                      `Stall owner rejected UTR ${paymentUtr} because ₹${grandTotal} was not received in their bank account.`}
+                    This dynamic QR code has expired. Click below to generate a fresh QR code.
                   </p>
-                </div>
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
-                  Order has been cancelled due to unverified UPI UTR.
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsPaymentModalOpen(false)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs cursor-pointer"
+                  onClick={handlePlaceOrder}
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer"
                 >
-                  Close
+                  Generate New UPI QR
                 </button>
               </div>
+            ) : isSubmitting ? (
+              /* 3. LOADING DYNAMIC GATEWAY QR */
+              <div className="py-10 text-center space-y-3">
+                <div className="w-12 h-12 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">Generating Dynamic UPI Payment...</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Connecting to BharatPe / UPIQRPay for automatic verification
+                  </p>
+                </div>
+              </div>
             ) : (
-              /* 4. ACTIVE SCAN & PAY + STRICT 12-DIGIT UTR INPUT SCREEN */
+              /* 4. ACTIVE UPI GATEWAY SCREEN (Direct GPay / PhonePe / Paytm + Dynamic QR + Auto-Verify) */
               <div className="space-y-3.5">
                 {/* Stall & Amount Header Card */}
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                   <div>
                     <span className="block text-[10px] uppercase font-bold text-slate-400">Total To Pay</span>
                     <span className="text-xl font-black text-slate-900">₹{grandTotal}</span>
-                    {shopUpiVpa && (
-                      <span className="block text-[10px] font-mono font-semibold text-emerald-700 mt-0.5">
-                        To: {shopUpiVpa}
-                      </span>
-                    )}
+                    <span className="block text-[10px] font-semibold text-emerald-700 mt-0.5">
+                      {upiData?.paymentId ? '✓ UPIQRPay Auto-Verify Active' : shopUpiVpa ? `To: ${shopUpiVpa}` : 'Verified Merchant'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-slate-700 shadow-2xs">
                     <Clock className="w-3.5 h-3.5 text-blue-600" />
@@ -889,107 +767,142 @@ export const CheckoutView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Dynamic QR Code Box */}
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col items-center justify-center relative">
-                  <img
-                    src={activeQrCodeUrl}
-                    alt="UPI Payment QR Code"
-                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-xl object-contain bg-white p-2.5 shadow-xs border border-slate-200"
-                  />
-
-                  {/* Scan Instruction */}
-                  <div className="mt-2 text-center">
-                    <p className="text-[11px] font-bold text-slate-700">Step 1: Scan &amp; Pay ₹{grandTotal} via any UPI App</p>
-                    <p className="text-[10px] text-slate-400">Google Pay • PhonePe • Paytm • BHIM • CRED</p>
-                  </div>
-                </div>
-
-                {/* Mobile Intent Direct Button */}
-                <a
-                  href={activeUpiLink}
-                  className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-xs shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Smartphone className="w-4 h-4" />
-                  <span>Open UPI App (GPay / PhonePe / Paytm)</span>
-                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-                </a>
-
-                {/* Payment Verification Mode Indicator */}
-                {upiData?.paymentId ? (
-                  <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-100 flex items-center justify-between text-xs text-blue-900">
-                    <div className="flex items-center gap-2">
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
-                      </span>
-                      <span className="text-[11px] font-semibold">Auto-detecting bank payment via gateway...</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 text-[11px] text-amber-900">
-                    <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Direct Stall UPI ({shopUpiVpa}):</strong> After paying in your UPI app, enter the{' '}
-                      <strong>12-digit UPI UTR / Reference No.</strong> below so the stall owner can verify your payment.
-                    </span>
+                {merchantNotice && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-semibold text-rose-800">
+                    {merchantNotice}
                   </div>
                 )}
 
-                {/* Step 2: Strict 12-Digit NPCI UTR Reference Input */}
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[11px] font-bold text-slate-800">
-                      Step 2: Enter 12-Digit UPI UTR / Ref No. *
-                    </label>
-                    <span className={`text-[10px] font-mono font-bold ${
-                      manualUtrInput.length === 12 ? 'text-emerald-600' : 'text-slate-400'
-                    }`}>
-                      {manualUtrInput.length}/12 digits
+                {/* Direct 1-Tap UPI Apps Grid (GPay, PhonePe, Paytm, BHIM) */}
+                <div className="space-y-2">
+                  <span className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
+                    Pay Directly with UPI App
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <a
+                      href={getUpiAppHref('gpay')}
+                      target={upiData?.payUrl && typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? '_blank' : undefined}
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 bg-white transition-all shadow-2xs cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-blue-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                        G
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-xs font-black text-slate-900 truncate">Google Pay</span>
+                        <span className="block text-[9px] text-slate-500">Instant Auto-Verify</span>
+                      </div>
+                    </a>
+
+                    <a
+                      href={getUpiAppHref('phonepe')}
+                      target={upiData?.payUrl && typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? '_blank' : undefined}
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 hover:border-purple-500 hover:bg-purple-50/40 bg-white transition-all shadow-2xs cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-purple-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                        Pe
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-xs font-black text-slate-900 truncate">PhonePe</span>
+                        <span className="block text-[9px] text-slate-500">Instant Auto-Verify</span>
+                      </div>
+                    </a>
+
+                    <a
+                      href={getUpiAppHref('paytm')}
+                      target={upiData?.payUrl && typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? '_blank' : undefined}
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 hover:border-sky-500 hover:bg-sky-50/40 bg-white transition-all shadow-2xs cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-sky-500 text-white font-black text-[10px] flex items-center justify-center shrink-0">
+                        Paytm
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-xs font-black text-slate-900 truncate">Paytm UPI</span>
+                        <span className="block text-[9px] text-slate-500">Instant Auto-Verify</span>
+                      </div>
+                    </a>
+
+                    <a
+                      href={getUpiAppHref('bhim')}
+                      target={upiData?.payUrl && typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? '_blank' : undefined}
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 bg-white transition-all shadow-2xs cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white font-black text-[10px] flex items-center justify-center shrink-0">
+                        UPI
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-xs font-black text-slate-900 truncate">Any UPI App</span>
+                        <span className="block text-[9px] text-slate-500">BHIM / CRED / Navi</span>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+
+                {/* Dynamic QR Code Box */}
+                {activeQrCodeUrl && (
+                  <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 flex flex-col items-center justify-center relative">
+                    <img
+                      src={activeQrCodeUrl}
+                      alt="UPI Payment QR Code"
+                      className="w-44 h-44 sm:w-48 sm:h-48 rounded-xl object-contain bg-white p-2 shadow-xs border border-slate-200"
+                    />
+                    <div className="mt-2 text-center">
+                      <p className="text-[11px] font-bold text-slate-700">Or Scan QR with Google Pay / PhonePe / Paytm</p>
+                      <p className="text-[10px] text-slate-400">
+                        Amount ₹{grandTotal} is pre-filled • Auto-detects payment in 2–3 seconds
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Live Automatic Verification Status Bar */}
+                <div className="p-3 rounded-2xl bg-blue-50/80 border border-blue-200/80 space-y-2">
+                  <div className="flex items-center gap-2.5 text-xs text-blue-950">
+                    <span className="relative flex h-3 w-3 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600"></span>
+                    </span>
+                    <span className="text-[11px] font-bold leading-snug">
+                      Waiting for payment... Order will be placed automatically once you pay in GPay / PhonePe / Paytm.
                     </span>
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={12}
-                      placeholder="12-digit UTR (e.g. 428190284721)"
-                      value={manualUtrInput}
-                      onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 12);
-                        setManualUtrInput(digitsOnly);
-                        if (utrError) setUtrError(null);
-                      }}
-                      className="flex-1 px-3 py-2.5 text-xs bg-white border border-slate-300 rounded-xl font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleUtrSubmit}
-                      disabled={isVerifying || manualUtrInput.length !== 12}
-                      className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                    >
-                      {isVerifying ? (
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                      )}
-                      <span>Verify UTR</span>
-                    </button>
-                  </div>
-                  {utrError && (
-                    <p className="text-[10px] font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                      {utrError}
+
+                  {statusCheckMsg && (
+                    <p className="text-[10px] font-semibold text-blue-800 bg-white/80 p-2 rounded-lg border border-blue-200">
+                      {statusCheckMsg}
                     </p>
                   )}
-                  <p className="text-[10px] text-slate-500 leading-tight">
-                    🔒 Strict 12-digit NPCI UTR check + Stall Owner bank verification. Fake or duplicate UTRs are rejected.
-                  </p>
+
+                  {upiData?.paymentId && (
+                    <button
+                      type="button"
+                      onClick={handleCheckPaymentNow}
+                      disabled={isVerifying}
+                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Checking Bank Status...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>I Have Paid — Check Status Now</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Switch to Cash Option */}
                 <button
                   type="button"
                   onClick={handleSwitchToCash}
-                  className="w-full py-2 text-center text-xs text-slate-500 hover:text-slate-800 font-medium transition-colors cursor-pointer"
+                  className="w-full py-1.5 text-center text-xs text-slate-500 hover:text-slate-800 font-medium transition-colors cursor-pointer"
                 >
                   Prefer to pay at counter? Switch to Cash
                 </button>

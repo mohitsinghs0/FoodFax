@@ -185,28 +185,29 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
 
       const qrResult = upiData.data;
 
-      // Update Database: Record payment row with status INITIATED
+      // Update Database: Record payment row if order already exists in DB
       try {
-        const paymentRow = {
-          id: `pay-${order_id}`,
-          order_id: order_id,
-          shop_id: orderShopId,
-          customer_id: order?.customer_id || null,
-          amount: orderAmount,
-          currency: 'INR',
-          payment_mode: 'PAY_ONLINE',
-          payment_status: 'INITIATED',
-          provider: 'upiqrpay',
-          provider_payment_id: qrResult.payment_id,
-          provider_order_id: qrResult.order_id,
-          qr_code_data: qrResult.qr_code,
-          upi_intent_url: qrResult.upi_link,
-          raw_payload: qrResult,
-          updated_at: new Date().toISOString(),
-        };
+        if (order) {
+          const paymentRow = {
+            id: `pay-${order_id}`,
+            order_id: order_id,
+            shop_id: orderShopId,
+            customer_id: order?.customer_id || null,
+            amount: orderAmount,
+            currency: 'INR',
+            payment_mode: 'PAY_ONLINE',
+            payment_status: 'PENDING',
+            provider: 'upiqrpay',
+            provider_payment_id: qrResult.payment_id,
+            provider_order_id: qrResult.order_id,
+            qr_code_data: qrResult.qr_code,
+            upi_intent_url: qrResult.upi_link,
+            raw_payload: qrResult,
+            updated_at: new Date().toISOString(),
+          };
 
-        await getSupabaseServer().from('payments').upsert(paymentRow);
-        await getSupabaseServer().from('orders').update({ payment_status: 'INITIATED' }).eq('id', order_id);
+          await getSupabaseServer().from('payments').upsert(paymentRow);
+        }
       } catch (dbErr) {
         console.warn('[PaymentAPI] Non-critical warning updating payments table:', dbErr);
       }
@@ -286,8 +287,8 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
           id: `pay-${order_id}`,
           order_id: order_id,
           payment_status: 'PAID',
-          transaction_id: utr_number,
-          utr_number: utr_number,
+          transaction_id: utr_number || payment_id,
+          utr_number: utr_number || payment_id,
           provider_payment_id: payment_id,
           paid_at: now,
           raw_payload: payload,
@@ -312,11 +313,17 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
     }
   }
 
-  // 3. Status Verification: GET /api/payment/status/:payment_id
-  if (url.startsWith('/api/payment/status/') && method === 'GET') {
+  // 3. Status Verification: GET /api/payment/status/:payment_id (or ?payment_id=...)
+  if (url.startsWith('/api/payment/status') && method === 'GET') {
     try {
-      const parts = url.split('?')[0].split('/');
-      const paymentId = parts[parts.length - 1];
+      const parsedUrl = new URL(url, 'http://localhost');
+      const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+      const lastSegment = pathParts[pathParts.length - 1];
+      const paymentId =
+        parsedUrl.searchParams.get('payment_id') ||
+        parsedUrl.searchParams.get('paymentId') ||
+        (lastSegment !== 'status' ? lastSegment : '');
+      const queryShopId = parsedUrl.searchParams.get('shop_id') || parsedUrl.searchParams.get('shopId');
 
       if (!paymentId) {
         sendJson(res, 400, { success: false, message: 'Missing payment_id' });
@@ -324,11 +331,15 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
       }
 
       // Check database first
-      const { data: paymentRecord } = await getSupabaseServer()
-        .from('payments')
-        .select('*')
-        .eq('provider_payment_id', paymentId)
-        .maybeSingle();
+      let paymentRecord: any = null;
+      try {
+        const { data } = await getSupabaseServer()
+          .from('payments')
+          .select('*')
+          .eq('provider_payment_id', paymentId)
+          .maybeSingle();
+        paymentRecord = data;
+      } catch {}
 
       if (paymentRecord && paymentRecord.payment_status === 'PAID') {
         sendJson(res, 200, {
@@ -337,40 +348,65 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
             payment_id: paymentId,
             order_id: paymentRecord.order_id,
             status: 'PAID',
-            utr_number: paymentRecord.utr_number,
+            utr_number: paymentRecord.utr_number || paymentRecord.transaction_id || paymentId,
             paid_at: paymentRecord.paid_at,
           },
         });
         return true;
       }
 
-      // If not yet marked PAID in DB, poll UPIQRPay official API
+      // Resolve shop-specific API key if available, otherwise Platform UPIQRPay API key
+      let shopApiKey = PLATFORM_UPIQRPAY_API_KEY;
+      const targetShopId = queryShopId || paymentRecord?.shop_id;
+      if (targetShopId) {
+        try {
+          const { data: shopData } = await getSupabaseServer()
+            .from('shops')
+            .select('upiqrpay_api_key')
+            .eq('id', targetShopId)
+            .maybeSingle();
+          if (shopData?.upiqrpay_api_key) {
+            shopApiKey = shopData.upiqrpay_api_key.trim();
+          }
+        } catch {}
+      }
+
+      // Poll UPIQRPay official API
       const upiRes = await fetch(`${UPIQRPAY_BASE_URL}/order/status/${paymentId}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${PLATFORM_UPIQRPAY_API_KEY}`,
+          'Authorization': `Bearer ${shopApiKey}`,
         },
       });
 
       const upiData: any = await upiRes.json().catch(() => ({}));
 
       if (upiRes.ok && upiData.success && upiData.data) {
-        const remoteStatus = upiData.data.status; // 'pending' | 'success' | 'expired' | 'cancelled'
-        if (remoteStatus === 'success') {
+        const remoteStatus = String(upiData.data.status || '').toLowerCase(); // 'pending' | 'success' | 'expired' | 'cancelled'
+        const isPaid = remoteStatus === 'success' || remoteStatus === 'paid' || remoteStatus === 'completed';
+        const verifiedUtr =
+          upiData.data.utr_number ||
+          upiData.data.utr ||
+          upiData.data.rrn ||
+          (isPaid ? paymentId : undefined);
+
+        if (isPaid) {
           const orderId = upiData.data.order_id || paymentRecord?.order_id;
           if (orderId) {
-            await getSupabaseServer().from('payments').update({
-              payment_status: 'PAID',
-              utr_number: upiData.data.utr_number,
-              transaction_id: upiData.data.utr_number,
-              paid_at: upiData.data.paid_at || new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }).eq('provider_payment_id', paymentId);
+            try {
+              await getSupabaseServer().from('payments').update({
+                payment_status: 'PAID',
+                utr_number: verifiedUtr,
+                transaction_id: verifiedUtr,
+                paid_at: upiData.data.paid_at || new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }).eq('provider_payment_id', paymentId);
 
-            await getSupabaseServer().from('orders').update({
-              payment_status: 'PAID',
-              updated_at: new Date().toISOString(),
-            }).eq('id', orderId);
+              await getSupabaseServer().from('orders').update({
+                payment_status: 'PAID',
+                updated_at: new Date().toISOString(),
+              }).eq('id', orderId);
+            } catch {}
           }
         }
 
@@ -379,8 +415,9 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
           data: {
             payment_id: paymentId,
             order_id: upiData.data.order_id,
-            status: remoteStatus === 'success' ? 'PAID' : remoteStatus.toUpperCase(),
-            utr_number: upiData.data.utr_number,
+            amount: upiData.data.amount,
+            status: isPaid ? 'PAID' : remoteStatus.toUpperCase(),
+            utr_number: verifiedUtr,
             paid_at: upiData.data.paid_at,
           },
         });
