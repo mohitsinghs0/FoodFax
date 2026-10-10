@@ -77,7 +77,13 @@ export const CheckoutView: React.FC = () => {
   useEffect(() => {
     if (shopId) {
       shopService.getShop(shopId).then((s) => {
-        if (s) setShopDetails(s);
+        if (s) {
+          setShopDetails(s);
+          // Auto-switch to cash if this shop has no UPI ID registered
+          if (!s.upiId?.trim()) {
+            setPaymentMethod('CASH_AT_COUNTER');
+          }
+        }
       });
     }
   }, [shopId]);
@@ -148,9 +154,16 @@ export const CheckoutView: React.FC = () => {
   const grandTotal = subtotal;
 
   // Derived UPI Intent link & QR code image
-  const shopUpiVpa = shopDetails?.upiId || 'stallowner@okaxis';
-  const directUpiUri = `upi://pay?pa=${encodeURIComponent(shopUpiVpa)}&pn=${encodeURIComponent(shopName || 'FoodFax Stall')}&am=${grandTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent('Token Order ' + (pendingOrderId || 'FoodFax'))}`;
-  const directQrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(directUpiUri)}&margin=10`;
+  // shopUpiVpa is ONLY set when the shop owner has a registered UPI ID in the database
+  const shopUpiVpa: string | null = shopDetails?.upiId?.trim() || null;
+  const shopHasUpi = Boolean(shopUpiVpa);
+
+  const directUpiUri = shopUpiVpa
+    ? `upi://pay?pa=${encodeURIComponent(shopUpiVpa)}&pn=${encodeURIComponent(shopName || 'FoodFax Stall')}&am=${grandTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent('Token Order ' + (pendingOrderId || 'FoodFax'))}`
+    : '';
+  const directQrImageUrl = shopUpiVpa
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(directUpiUri)}&margin=10`
+    : '';
 
   const activeQrCodeUrl = upiData?.qrCode || directQrImageUrl;
   const activeUpiLink = upiData?.upiLink || directUpiUri;
@@ -473,41 +486,65 @@ export const CheckoutView: React.FC = () => {
       <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-5 shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-sm text-slate-900">3. Select Payment Method</h2>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            UPI QR & Mobile App
-          </span>
+          {shopHasUpi && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              UPI QR &amp; Mobile App
+            </span>
+          )}
         </div>
+
+        {/* Warning: shown only when shop has no UPI ID registered */}
+        {!shopHasUpi && shopDetails && (
+          <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] font-semibold text-amber-800 leading-tight">
+              This stall hasn&apos;t added a UPI ID yet. Only Cash at Stall is available.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
           {/* Option A: UPI / Online */}
           <button
             type="button"
-            onClick={() => setPaymentMethod('PAY_ONLINE')}
-            className={`p-3.5 sm:p-4 rounded-2xl border-2 text-left transition-all min-w-0 cursor-pointer relative ${
-              paymentMethod === 'PAY_ONLINE'
-                ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 shadow-md ring-2 ring-emerald-500/20'
-                : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white'
+            disabled={!shopHasUpi}
+            onClick={() => shopHasUpi && setPaymentMethod('PAY_ONLINE')}
+            className={`p-3.5 sm:p-4 rounded-2xl border-2 text-left transition-all min-w-0 relative ${
+              !shopHasUpi
+                ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed opacity-60'
+                : paymentMethod === 'PAY_ONLINE'
+                ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 shadow-md ring-2 ring-emerald-500/20 cursor-pointer'
+                : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white cursor-pointer'
             }`}
           >
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-1.5">
-                <QrCode className={`w-4.5 h-4.5 ${paymentMethod === 'PAY_ONLINE' ? 'text-emerald-700' : 'text-slate-500'}`} />
+                <QrCode className={`w-4.5 h-4.5 ${!shopHasUpi ? 'text-slate-300' : paymentMethod === 'PAY_ONLINE' ? 'text-emerald-700' : 'text-slate-500'}`} />
                 <span className="font-black text-xs sm:text-sm">UPI Online</span>
               </div>
               <div className={`w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center ${
-                paymentMethod === 'PAY_ONLINE' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 bg-white'
+                !shopHasUpi ? 'border-slate-200 bg-slate-100' : paymentMethod === 'PAY_ONLINE' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 bg-white'
               }`}>
-                {paymentMethod === 'PAY_ONLINE' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                {paymentMethod === 'PAY_ONLINE' && shopHasUpi && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
               </div>
             </div>
-            <p className="text-[10px] sm:text-[11px] font-medium text-slate-600 leading-tight">
+            <p className="text-[10px] sm:text-[11px] font-medium text-slate-500 leading-tight">
               GPay, PhonePe, Paytm, QR
             </p>
-            <span className={`inline-block mt-2 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-              paymentMethod === 'PAY_ONLINE' ? 'bg-emerald-200/80 text-emerald-900' : 'bg-slate-100 text-slate-500'
-            }`}>
-              Pay Online Now
-            </span>
+            {shopHasUpi ? (
+              <>
+                <span className="inline-block mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                  UPI: {shopUpiVpa}
+                </span>
+                <span className={`block mt-1 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                  paymentMethod === 'PAY_ONLINE' ? 'bg-emerald-200/80 text-emerald-900' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  Pay Online Now
+                </span>
+              </>
+            ) : (
+              <span className="block mt-1.5 text-[9px] font-semibold text-slate-400">Not available</span>
+            )}
           </button>
 
           {/* Option B: Cash at Counter */}

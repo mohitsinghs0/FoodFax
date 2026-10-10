@@ -179,6 +179,7 @@ export function normalizeShopDoc(data: any): Shop {
     isSuspended: Boolean(data.is_suspended ?? data.isSuspended),
     kycStatus: data.kyc_status || data.kycStatus || (data.status === 'pending_kyc' ? 'pending' : 'approved'),
     status: data.status || (Boolean(data.is_suspended ?? data.isSuspended) ? 'suspended' : 'active'),
+    upiId: data.upi_id || data.upiId || undefined,
     upiqrpayApiKey: data.upiqrpay_api_key || data.upiqrpayApiKey,
     upiqrpayWebhookSecret: data.upiqrpay_webhook_secret || data.upiqrpayWebhookSecret,
     isOnlinePaymentEnabled: data.is_online_payment_enabled !== undefined ? Boolean(data.is_online_payment_enabled) : (data.isOnlinePaymentEnabled !== undefined ? Boolean(data.isOnlinePaymentEnabled) : true),
@@ -964,25 +965,12 @@ class SupabaseSyncService {
       remoteList.forEach((i) => mergedMap.set(i.id, i));
       filteredLocal.forEach((i) => mergedMap.set(i.id, i));
 
-      let result = Array.from(mergedMap.values());
+      const result = Array.from(mergedMap.values());
 
-      // If stall has no items or only 1 item, supplement with default menu items so customers never see an empty stall
-      if (result.length === 0 && shopId) {
-        const defaults = generateDefaultShopMenu(shopId, slug);
-        defaults.forEach((i) => mergedMap.set(i.id, i));
-        result = Array.from(mergedMap.values());
-      } else if (result.length > 0 && result.length < 3 && shopId) {
-        const defaults = generateDefaultShopMenu(shopId, slug);
-        defaults.forEach((d) => {
-          if (!mergedMap.has(d.id) && mergedMap.size < 6) {
-            mergedMap.set(d.id, d);
-          }
-        });
-        result = Array.from(mergedMap.values());
-      }
-
+      // Only return real items from DB — never pad with fake defaults
       if (result.length > 0) return result;
 
+      // Zero items in DB: only then show fallback so the customer page isn't blank
       return shopId ? generateDefaultShopMenu(shopId, slug) : MOCK_MENU_ITEMS;
     } catch (err) {
       console.warn('[Supabase] Error fetching menu items, using fallback:', err);
