@@ -21,11 +21,24 @@ class OrderRealtimeService {
 
     // 2. Subscribe to Supabase Realtime postgres_changes for the orders table
     const unsubscribeSupabase = firestoreSync.subscribeToShopOrders(shopId, (cloudOrders) => {
-      // Merge remote updates with local cache
+      // Merge remote updates with local cache while preserving joined items & UTR
       const current = orderService.getStoredOrders();
       const map = new Map<string, Order>();
       current.forEach((o) => map.set(o.id, o));
-      cloudOrders.forEach((o) => map.set(o.id, o));
+      cloudOrders.forEach((o) => {
+        const prev = map.get(o.id);
+        map.set(
+          o.id,
+          prev
+            ? {
+                ...prev,
+                ...o,
+                items: o.items && o.items.length > 0 ? o.items : prev.items,
+                utrNumber: o.utrNumber || prev.utrNumber,
+              }
+            : o
+        );
+      });
       const merged = Array.from(map.values());
       merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       orderService.saveOrders(merged);
@@ -66,16 +79,23 @@ class OrderRealtimeService {
   public subscribeToOrder(orderId: string, onOrderUpdate: OrderEventCallback): () => void {
     const unsubLocal = orderService.subscribeToOrder(orderId, onOrderUpdate);
     const unsubSupabase = firestoreSync.subscribeToSingleOrder(orderId, (order) => {
-      // Sync the remote update into localStorage cache
+      // Sync the remote update into localStorage cache while preserving items & UTR
       const current = orderService.getStoredOrders();
       const idx = current.findIndex((o) => o.id === order.id);
+      let mergedOrder = order;
       if (idx !== -1) {
-        current[idx] = order;
+        mergedOrder = {
+          ...current[idx],
+          ...order,
+          items: order.items && order.items.length > 0 ? order.items : current[idx].items,
+          utrNumber: order.utrNumber || current[idx].utrNumber,
+        };
+        current[idx] = mergedOrder;
       } else {
         current.unshift(order);
       }
       orderService.saveOrders(current);
-      onOrderUpdate(order);
+      onOrderUpdate(mergedOrder);
     });
 
     // Cross-tab storage sync

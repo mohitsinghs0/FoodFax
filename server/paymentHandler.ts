@@ -402,37 +402,85 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
     }
   }
 
-  // 4. Test Simulator Helper (Development Mode Only): POST /api/payment/simulate-success
-  if (url.startsWith('/api/payment/simulate-success') && method === 'POST') {
+  // 4. Strict UTR Verification & Anti-Replay Check: POST /api/payment/verify-utr
+  if (url.startsWith('/api/payment/verify-utr') && method === 'POST') {
     try {
       const rawBody = await readBody(req);
-      const { order_id, payment_id } = JSON.parse(rawBody || '{}');
+      const { order_id, payment_id, utr_number } = JSON.parse(rawBody || '{}');
+      const cleanedUtr = String(utr_number || '').replace(/\s+/g, '').trim();
 
-      const mockUtr = `UTR${Date.now().toString().slice(-9)}`;
-      const now = new Date().toISOString();
-
-      if (order_id) {
-        await getSupabaseServer().from('orders').update({
-          payment_status: 'PAID',
-          updated_at: now,
-        }).eq('id', order_id);
-
-        await getSupabaseServer().from('payments').upsert({
-          id: `pay-${order_id}`,
-          order_id: order_id,
-          payment_status: 'PAID',
-          utr_number: mockUtr,
-          transaction_id: mockUtr,
-          provider_payment_id: payment_id || `sim-${Date.now()}`,
-          paid_at: now,
-          updated_at: now,
+      // 1. Strict 12-digit NPCI RRN format check
+      if (
+        !/^[1-9][0-9]{11}$/.test(cleanedUtr) ||
+        /(\d)\1{5,}/.test(cleanedUtr) ||
+        new Set(cleanedUtr.split('')).size < 4 ||
+        /^(\d{2,6})\1+$/.test(cleanedUtr)
+      ) {
+        sendJson(res, 400, {
+          success: false,
+          code: 'INVALID_UTR_FORMAT',
+          message: 'Invalid 12-digit UPI UTR / Reference number.',
         });
+        return true;
       }
 
+      // 2. Database Anti-Replay Check: ensure this UTR was never used in another order
+      try {
+        const { data: existingRows } = await getSupabaseServer()
+          .from('payments')
+          .select('id, order_id, payment_status')
+          .eq('transaction_id', cleanedUtr)
+          .limit(5);
+
+        if (Array.isArray(existingRows) && existingRows.length > 0) {
+          const duplicate = existingRows.some(
+            (r: any) => r.order_id !== order_id && r.payment_status !== 'FAILED'
+          );
+          if (duplicate) {
+            sendJson(res, 400, {
+              success: false,
+              code: 'DUPLICATE_UTR',
+              message: 'This 12-digit UTR number has already been used for another order.',
+            });
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn('[PaymentAPI] UTR uniqueness lookup warning:', e);
+      }
+
+      // 3. If UPIQRPay payment_id exists, check gateway directly to see if bank confirmed it
+      if (payment_id) {
+        try {
+          const upiRes = await fetch(`${UPIQRPAY_BASE_URL}/order/status/${payment_id}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${PLATFORM_UPIQRPAY_API_KEY}`,
+            },
+          });
+          const upiData: any = await upiRes.json().catch(() => ({}));
+          if (upiRes.ok && upiData?.success && upiData?.data?.status === 'success') {
+            const gatewayUtr = String(upiData.data.utr_number || '').trim();
+            if (!gatewayUtr || gatewayUtr === cleanedUtr) {
+              sendJson(res, 200, {
+                success: true,
+                verifiedByGateway: true,
+                status: 'PAID',
+                utr_number: gatewayUtr || cleanedUtr,
+              });
+              return true;
+            }
+          }
+        } catch {}
+      }
+
+      // 4. For Direct UPI (personal VPA), never auto-mark PAID without shopkeeper confirmation!
       sendJson(res, 200, {
         success: true,
-        message: 'Order simulated as PAID for sandbox testing',
-        utr: mockUtr,
+        verifiedByGateway: false,
+        status: 'PENDING',
+        utr_number: cleanedUtr,
+        message: 'UTR validated and queued for stall owner bank verification.',
       });
       return true;
     } catch (err: any) {

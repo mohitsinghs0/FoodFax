@@ -142,6 +142,7 @@ export interface Order {
   paymentMethod: PaymentMethod;
   paymentMode?: PaymentMode;
   paymentStatus: PaymentStatus;
+  utrNumber?: string;
   orderStatus: OrderStatus;
   items: OrderItem[];
   subtotal: number;

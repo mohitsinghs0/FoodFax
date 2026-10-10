@@ -91,7 +91,13 @@ export const orderService = {
     localOrders.forEach((o) => orderMap.set(o.id, o));
     remoteOrders.forEach((o) => {
       if (!o.isDemo && !MOCK_ORDER_IDS.has(o.id)) {
-        orderMap.set(o.id, o);
+        const existing = orderMap.get(o.id);
+        orderMap.set(o.id, {
+          ...existing,
+          ...o,
+          items: o.items && o.items.length > 0 ? o.items : existing?.items || [],
+          utrNumber: o.utrNumber || existing?.utrNumber,
+        });
       }
     });
 
@@ -119,7 +125,13 @@ export const orderService = {
     localOrders.forEach((o) => orderMap.set(o.id, o));
     remoteOrders.forEach((o) => {
       if (!o.isDemo && !MOCK_ORDER_IDS.has(o.id)) {
-        orderMap.set(o.id, o);
+        const existing = orderMap.get(o.id);
+        orderMap.set(o.id, {
+          ...existing,
+          ...o,
+          items: o.items && o.items.length > 0 ? o.items : existing?.items || [],
+          utrNumber: o.utrNumber || existing?.utrNumber,
+        });
       }
     });
 
@@ -147,20 +159,36 @@ export const orderService = {
   async getOrder(orderId: string): Promise<Order | null> {
     await new Promise((r) => setTimeout(r, 30));
     const orders = this.getStoredOrders();
-    const found = orders.find((o) => o.id === orderId);
-    if (found) return found;
+    const localFound = orders.find((o) => o.id === orderId);
+
+    // Always try remote database first so live paymentStatus / orderStatus changes from Shop Owner are reflected
+    try {
+      const remote = await firestoreSync.getOrder(orderId);
+      if (remote) {
+        const merged: Order = {
+          ...localFound,
+          ...remote,
+          items: remote.items && remote.items.length > 0 ? remote.items : localFound?.items || [],
+          utrNumber: remote.utrNumber || localFound?.utrNumber,
+        };
+        if (localFound) {
+          const idx = orders.findIndex((o) => o.id === orderId);
+          if (idx !== -1) {
+            orders[idx] = merged;
+            this.saveOrders(orders);
+          }
+        }
+        return merged;
+      }
+    } catch {
+      // ignore and fall back to local
+    }
+
+    if (localFound) return localFound;
 
     // Check INITIAL_ORDERS
     const mockFound = INITIAL_ORDERS.find((o) => o.id === orderId);
     if (mockFound) return mockFound;
-
-    // Check remote database
-    try {
-      const remote = await firestoreSync.getOrder(orderId);
-      if (remote) return remote;
-    } catch {
-      // ignore
-    }
 
     return null;
   },
@@ -346,22 +374,138 @@ export const orderService = {
 
   async markPaymentPaid(orderId: string): Promise<Order | null> {
     const orders = this.getStoredOrders();
-    const index = orders.findIndex((o) => o.id === orderId);
-    if (index === -1) return null;
+    let index = orders.findIndex((o) => o.id === orderId);
+    let targetOrder: Order | null = null;
+    const now = new Date().toISOString();
 
-    const order = {
-      ...orders[index],
-      paymentStatus: 'PAID' as const,
-      updatedAt: new Date().toISOString(),
+    if (index !== -1) {
+      targetOrder = {
+        ...orders[index],
+        paymentStatus: 'PAID' as const,
+        updatedAt: now,
+      };
+      orders[index] = targetOrder;
+      this.saveOrders(orders);
+    } else {
+      const remote = await firestoreSync.getOrder(orderId);
+      if (remote) {
+        targetOrder = {
+          ...remote,
+          paymentStatus: 'PAID' as const,
+          updatedAt: now,
+        };
+        this.saveOrders([targetOrder, ...orders]);
+      }
+    }
+
+    if (!targetOrder) return null;
+
+    await firestoreSync.updateOrderPaymentStatus(orderId, 'PAID', targetOrder.utrNumber);
+    this.notifyOrderListeners(targetOrder);
+    this.notifyShopListeners(targetOrder.shopId);
+    return targetOrder;
+  },
+
+  /**
+   * Called by Shop Owner after verifying that the UPI payment (and 12-digit UTR)
+   * actually arrived in their bank account / GPay / PhonePe / Soundbox.
+   */
+  async verifyOnlinePaymentAndAccept(orderId: string): Promise<Order | null> {
+    const orders = this.getStoredOrders();
+    const index = orders.findIndex((o) => o.id === orderId);
+    const now = new Date().toISOString();
+    let targetOrder: Order | null = null;
+
+    if (index !== -1) {
+      targetOrder = {
+        ...orders[index],
+        paymentStatus: 'PAID',
+        orderStatus: 'ACCEPTED',
+        updatedAt: now,
+      };
+      orders[index] = targetOrder;
+      this.saveOrders(orders);
+    } else {
+      const remote = await firestoreSync.getOrder(orderId);
+      if (remote) {
+        targetOrder = {
+          ...remote,
+          paymentStatus: 'PAID',
+          orderStatus: 'ACCEPTED',
+          updatedAt: now,
+        };
+        this.saveOrders([targetOrder, ...orders]);
+      }
+    }
+
+    if (!targetOrder) return null;
+
+    await firestoreSync.updateOrderStatus(
+      orderId,
+      'ACCEPTED',
+      { paymentStatus: 'PAID' },
+      'owner',
+      `UPI payment verified by stall owner (UTR: ${targetOrder.utrNumber || 'Verified'})`
+    );
+
+    this.notifyOrderListeners(targetOrder);
+    this.notifyShopListeners(targetOrder.shopId);
+    return targetOrder;
+  },
+
+  /**
+   * Called by Shop Owner when a customer submits a fake/invalid UTR or money was not received.
+   */
+  async rejectFakeUpiPayment(orderId: string, customReason?: string): Promise<Order | null> {
+    const orders = this.getStoredOrders();
+    const index = orders.findIndex((o) => o.id === orderId);
+    const now = new Date().toISOString();
+    let targetOrder: Order | null = null;
+
+    const existing = index !== -1 ? orders[index] : await firestoreSync.getOrder(orderId);
+    if (!existing) return null;
+
+    const reason =
+      customReason ||
+      `UPI payment verification failed: ₹${existing.total} (UTR: ${existing.utrNumber || 'N/A'}) was not received in stall's bank account.`;
+
+    targetOrder = {
+      ...existing,
+      paymentStatus: 'FAILED',
+      orderStatus: 'CANCELLED',
+      cancellationReason: reason,
+      cancelledAt: now,
+      cancelledBy: 'owner',
+      updatedAt: now,
     };
-    orders[index] = order;
-    this.saveOrders(orders);
-    this.notifyOrderListeners(order);
-    this.notifyShopListeners(order.shopId);
-    return order;
+
+    if (index !== -1) {
+      orders[index] = targetOrder;
+      this.saveOrders(orders);
+    } else {
+      this.saveOrders([targetOrder, ...orders]);
+    }
+
+    await firestoreSync.updateOrderStatus(
+      orderId,
+      'CANCELLED',
+      {
+        paymentStatus: 'FAILED',
+        cancellationReason: reason,
+        cancelledAt: now,
+        cancelledBy: 'owner',
+      },
+      'owner',
+      reason
+    );
+
+    this.notifyOrderListeners(targetOrder);
+    this.notifyShopListeners(targetOrder.shopId);
+    return targetOrder;
   },
 
   async createOrder(data: {
+    id?: string;
     shopId: string;
     shopName: string;
     shopImage?: string;
@@ -372,6 +516,8 @@ export const orderService = {
     orderType: 'TAKEAWAY' | 'DINE_IN';
     tableNumber?: string;
     paymentMethod: 'CASH_AT_COUNTER' | 'PAY_ONLINE';
+    paymentStatus?: 'PENDING' | 'PAID' | 'COLLECT_ON_DELIVERY';
+    utrNumber?: string;
     items: {
       id: string;
       menuItemId: string;
@@ -398,8 +544,13 @@ export const orderService = {
     const tokenInt = await firestoreSync.generateOrderToken(data.shopId);
     const tokenNumber = `#${tokenInt}`;
 
+    // Online payments start as 'PENDING' (unverified) unless verified by gateway webhook ('PAID')
+    const initialPaymentStatus =
+      data.paymentStatus ||
+      (data.paymentMethod === 'PAY_ONLINE' ? 'PENDING' : 'COLLECT_ON_DELIVERY');
+
     const newOrder: Order = {
-      id: `ord-${Date.now().toString().slice(-6)}`,
+      id: data.id || `ord-${Date.now().toString().slice(-6)}`,
       shopId: data.shopId,
       shopName: data.shopName,
       shopImage: data.shopImage,
@@ -411,7 +562,8 @@ export const orderService = {
       orderType: data.orderType,
       tableNumber: data.tableNumber,
       paymentMethod: data.paymentMethod,
-      paymentStatus: data.paymentMethod === 'PAY_ONLINE' ? 'INITIATED' : 'COLLECT_ON_DELIVERY',
+      paymentStatus: initialPaymentStatus,
+      utrNumber: data.utrNumber,
       orderStatus: 'PENDING',
       items: data.items,
       subtotal: data.subtotal,
@@ -428,6 +580,25 @@ export const orderService = {
     this.notifyShopListeners(data.shopId);
     await firestoreSync.saveOrder(newOrder);
     this.notifyOrderCommitted(newOrder);
+
+    // Notify Shop Owner terminal of incoming order / UPI verification request
+    try {
+      await notificationService.addNotification({
+        shopId: data.shopId,
+        title:
+          data.paymentMethod === 'PAY_ONLINE' && initialPaymentStatus !== 'PAID'
+            ? `⚠️ Verify UPI ₹${data.total} (${tokenNumber})`
+            : `New Order ${tokenNumber} (₹${data.total})`,
+        message:
+          data.paymentMethod === 'PAY_ONLINE' && initialPaymentStatus !== 'PAID'
+            ? `${newOrder.customerName} submitted UPI UTR: ${data.utrNumber || 'Pending'}. Check your bank/GPay for ₹${data.total} before accepting!`
+            : `${newOrder.customerName} placed a ${data.orderType.toLowerCase()} order for ₹${data.total}.`,
+        type: data.paymentMethod === 'PAY_ONLINE' ? 'PAYMENT' : 'ORDER_NEW',
+        tokenNumber,
+        orderId: newOrder.id,
+        amount: data.total,
+      });
+    } catch {}
 
     return newOrder;
   },

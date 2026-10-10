@@ -449,6 +449,37 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
         </section>
       )}
 
+      {/* 1.05 PENDING UPI UTR VERIFICATION BANNER */}
+      {!isCancelled && order.paymentMethod === 'PAY_ONLINE' && order.paymentStatus !== 'PAID' && (
+        <section
+          role="status"
+          aria-live="polite"
+          className="p-4 rounded-3xl bg-amber-50 border-2 border-amber-300 shadow-md space-y-2"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="flex-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-800 block">
+                Stall UPI Verification Pending
+              </span>
+              <h3 className="text-sm font-black text-amber-950 leading-tight mt-0.5">
+                Verifying 12-Digit UTR with {order.shopName}
+              </h3>
+              <p className="text-xs text-amber-900 font-medium mt-1">
+                {order.utrNumber ? (
+                  <>
+                    Claimed UTR: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-amber-300">{order.utrNumber}</strong>.
+                  </>
+                ) : null}{' '}
+                The stall owner is matching your ₹{order.total} bank credit before starting preparation.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 1.1 HIGH-PRIORITY READY CALLOUT BANNER */}
       {!isCancelled && isReady && (
         <section
@@ -577,8 +608,28 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
               : 'Takeaway Parcel'}
           </span>
           <span className="text-slate-300">•</span>
-          <span className="font-semibold text-slate-600 px-2 py-0.5 rounded-md bg-slate-100">
-            {order.paymentMethod === 'CASH_AT_COUNTER' ? 'Cash at Counter' : 'Online Paid ✓'}
+          <span
+            className={`font-semibold px-2 py-0.5 rounded-md ${
+              order.paymentMethod === 'CASH_AT_COUNTER'
+                ? order.paymentStatus === 'PAID'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-100 text-slate-600'
+                : order.paymentStatus === 'PAID'
+                ? 'bg-emerald-100 text-emerald-800'
+                : order.paymentStatus === 'FAILED'
+                ? 'bg-red-100 text-red-800'
+                : 'bg-amber-100 text-amber-900'
+            }`}
+          >
+            {order.paymentMethod === 'CASH_AT_COUNTER'
+              ? order.paymentStatus === 'PAID'
+                ? 'Cash Paid ✓'
+                : 'Cash at Counter'
+              : order.paymentStatus === 'PAID'
+              ? 'UPI Verified & Paid ✓'
+              : order.paymentStatus === 'FAILED'
+              ? 'UPI Verification Failed ✕'
+              : '⏳ UPI UTR Verifying...'}
           </span>
         </div>
 
@@ -1128,82 +1179,25 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
               <span>Taxes & Stall Charges</span>
               <span className="text-emerald-600 font-bold">₹0 (Free)</span>
             </div>
+            {order.utrNumber && (
+              <div className="flex justify-between text-slate-600">
+                <span>UPI Reference (UTR)</span>
+                <span className="font-mono font-bold text-slate-900">{order.utrNumber}</span>
+              </div>
+            )}
             <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-sm">
-              <span className="font-bold text-slate-800">Grand Total Paid</span>
+              <span className="font-bold text-slate-800">
+                {order.paymentStatus === 'PAID'
+                  ? 'Grand Total Paid ✓'
+                  : order.paymentMethod === 'CASH_AT_COUNTER'
+                  ? 'Total Payable at Counter'
+                  : 'Total (Pending Stall Verification)'}
+              </span>
               <span className="text-lg font-black text-slate-900">₹{order.total}</span>
             </div>
           </div>
         </section>
       )}
-
-      {/* 5. INTERACTIVE TESTING & STALL SIMULATOR DOCK */}
-      {/* Allows users and testers to experience real-time order lifecycle changes! */}
-      <section 
-        aria-label="Interactive Stall Counter Simulation Controls"
-        className="p-4 rounded-3xl bg-slate-900 text-white shadow-lg border border-slate-800"
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-orange-400" />
-            <span className="text-xs font-bold text-white uppercase tracking-wider">
-              Stall Counter Simulation Deck
-            </span>
-          </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-orange-300 border border-slate-700">
-            Interactive Tester
-          </span>
-        </div>
-        <p className="text-[11px] text-slate-400 mb-3 leading-snug">
-          Simulate stall counter updating this live order status in real time:
-        </p>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <button
-            onClick={() => advanceOrderStatus('ACCEPTED')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-colors focus-visible:ring-2 focus-visible:ring-orange-400 ${
-              order.orderStatus === 'ACCEPTED'
-                ? 'bg-orange-500 text-white ring-2 ring-orange-300'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-            }`}
-            aria-pressed={order.orderStatus === 'ACCEPTED'}
-          >
-            1. Accept Slot
-          </button>
-          <button
-            onClick={() => advanceOrderStatus('PREPARING')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-colors focus-visible:ring-2 focus-visible:ring-orange-400 ${
-              order.orderStatus === 'PREPARING'
-                ? 'bg-orange-500 text-white ring-2 ring-orange-300'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-            }`}
-            aria-pressed={order.orderStatus === 'PREPARING'}
-          >
-            2. Cooking 🔥
-          </button>
-          <button
-            onClick={() => advanceOrderStatus('READY')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-colors focus-visible:ring-2 focus-visible:ring-emerald-400 ${
-              order.orderStatus === 'READY'
-                ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-            }`}
-            aria-pressed={order.orderStatus === 'READY'}
-          >
-            3. Call Token 🔔
-          </button>
-          <button
-            onClick={() => advanceOrderStatus('COMPLETED')}
-            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-colors focus-visible:ring-2 focus-visible:ring-slate-400 ${
-              order.orderStatus === 'COMPLETED'
-                ? 'bg-slate-600 text-white ring-2 ring-slate-300'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-            }`}
-            aria-pressed={order.orderStatus === 'COMPLETED'}
-          >
-            4. Handover ✓
-          </button>
-        </div>
-      </section>
 
       {/* Actions */}
       <div className="flex gap-3 pt-2">

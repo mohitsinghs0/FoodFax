@@ -191,6 +191,27 @@ export function normalizeShopDoc(data: any): Shop {
  * Normalizes a database row into standard frontend Order interface.
  */
 export function normalizeOrderDoc(data: any): Order {
+  const paymentRow = Array.isArray(data.payments) ? data.payments[0] : data.payments;
+  const utrNumber =
+    data.utr_number ||
+    data.utrNumber ||
+    paymentRow?.utr_number ||
+    paymentRow?.transaction_id ||
+    undefined;
+
+  const rawItems = Array.isArray(data.items) && data.items.length > 0
+    ? data.items
+    : Array.isArray(data.order_items)
+    ? data.order_items.map((it: any) => ({
+        id: it.id,
+        menuItemId: it.menu_item_id || it.menuItemId || it.id,
+        name: it.name,
+        price: Number(it.price || 0),
+        quantity: Number(it.quantity || 1),
+        isVeg: it.is_veg !== undefined ? Boolean(it.is_veg) : Boolean(it.isVeg ?? true),
+      }))
+    : [];
+
   return {
     id: data.id,
     shopId: data.shop_id || data.shopId,
@@ -206,8 +227,9 @@ export function normalizeOrderDoc(data: any): Order {
     paymentMethod: data.payment_method || data.paymentMethod || 'CASH_AT_COUNTER',
     paymentMode: data.payment_mode || data.paymentMode || data.payment_method || 'CASH_AT_COUNTER',
     paymentStatus: data.payment_status || data.paymentStatus || 'PENDING',
+    utrNumber,
     orderStatus: data.order_status || data.orderStatus || 'PENDING',
-    items: Array.isArray(data.items) ? data.items : [],
+    items: rawItems,
     subtotal: Number(data.subtotal || 0),
     total: Number(data.total || 0),
     estimatedPreparationMinutes: data.estimated_preparation_minutes || data.estimatedPreparationMinutes || '5-10',
@@ -1048,6 +1070,11 @@ class SupabaseSyncService {
     this.startSync();
 
     try {
+      const safePaymentStatus =
+        order.paymentStatus === 'INITIATED' || order.paymentStatus === 'PROCESSING'
+          ? 'PENDING'
+          : order.paymentStatus || 'PENDING';
+
       const dbOrder = {
         id: order.id,
         shop_id: order.shopId,
@@ -1061,7 +1088,7 @@ class SupabaseSyncService {
         order_type: order.orderType || 'TAKEAWAY',
         table_number: order.tableNumber,
         payment_method: order.paymentMethod,
-        payment_status: order.paymentStatus || 'PENDING',
+        payment_status: safePaymentStatus,
         order_status: order.orderStatus || 'PENDING',
         subtotal: order.subtotal,
         total: order.total,
@@ -1099,7 +1126,23 @@ class SupabaseSyncService {
         await supabase.from('order_items').upsert(orderItemRows);
       }
 
-      // 3. Notify listeners
+      // 3. Save payment record in payments table (with UTR in transaction_id)
+      if (order.paymentMethod === 'PAY_ONLINE' || order.utrNumber) {
+        const now = new Date().toISOString();
+        await supabase.from('payments').upsert({
+          id: `pay-${order.id}`,
+          order_id: order.id,
+          payment_mode: order.paymentMethod || 'PAY_ONLINE',
+          payment_status: safePaymentStatus,
+          amount: order.total,
+          transaction_id: order.utrNumber || null,
+          provider: order.utrNumber ? 'direct_upi_utr' : 'upiqrpay',
+          paid_at: safePaymentStatus === 'PAID' ? now : null,
+          updated_at: now,
+        });
+      }
+
+      // 4. Notify listeners
       notifyDatabaseOrderCommitted(order);
     } catch (err) {
       console.warn('[Supabase] Error saving order:', err);
@@ -1119,11 +1162,17 @@ class SupabaseSyncService {
 
       if (error || !data) return null;
 
-      // Also fetch items snapshot
-      const { data: itemRows } = await supabase
-        .from('order_items')
-        .select('*')
-        .eq('order_id', orderId);
+      // Fetch items snapshot and payment UTR in parallel
+      const [{ data: itemRows }, { data: paymentRow }] = await Promise.all([
+        supabase.from('order_items').select('*').eq('order_id', orderId),
+        supabase
+          .from('payments')
+          .select('transaction_id, payment_status, paid_at')
+          .eq('order_id', orderId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
       const items: OrderItem[] = (itemRows || []).map((it) => ({
         id: it.id,
@@ -1134,7 +1183,11 @@ class SupabaseSyncService {
         isVeg: Boolean(it.is_veg),
       }));
 
-      return normalizeOrderDoc({ ...data, items });
+      return normalizeOrderDoc({
+        ...data,
+        items,
+        utr_number: paymentRow?.transaction_id || data.utr_number,
+      });
     } catch (err) {
       console.warn('[Supabase] Error getting order:', err);
       return null;
@@ -1148,12 +1201,23 @@ class SupabaseSyncService {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, order_items(*), payments(transaction_id, payment_status, paid_at)')
         .eq('shop_id', shopId)
         .order('created_at', { ascending: false });
 
       if (!error && data) {
         return data.map(normalizeOrderDoc);
+      }
+
+      // Fallback if relational join is unavailable
+      const { data: fallbackData } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('shop_id', shopId)
+        .order('created_at', { ascending: false });
+
+      if (fallbackData) {
+        return fallbackData.map(normalizeOrderDoc);
       }
       return [];
     } catch (err) {
@@ -1169,12 +1233,22 @@ class SupabaseSyncService {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, order_items(*), payments(transaction_id, payment_status, paid_at)')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false });
 
       if (!error && data) {
         return data.map(normalizeOrderDoc);
+      }
+
+      const { data: fallbackData } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false });
+
+      if (fallbackData) {
+        return fallbackData.map(normalizeOrderDoc);
       }
       return [];
     } catch (err) {
@@ -1194,6 +1268,7 @@ class SupabaseSyncService {
       cancelledBy?: 'customer' | 'owner' | 'system' | string;
       readyAt?: string;
       completedAt?: string;
+      paymentStatus?: PaymentStatus;
     },
     changedBy?: string,
     note?: string
@@ -1206,6 +1281,9 @@ class SupabaseSyncService {
         updated_at: now,
       };
 
+      if (details?.paymentStatus) {
+        updates.payment_status = details.paymentStatus;
+      }
       if (status === 'READY') updates.ready_at = details?.readyAt || now;
       if (status === 'COMPLETED') updates.completed_at = details?.completedAt || now;
       if (status === 'CANCELLED') {
@@ -1215,6 +1293,17 @@ class SupabaseSyncService {
       }
 
       await supabase.from('orders').update(updates).eq('id', orderId);
+
+      if (details?.paymentStatus) {
+        await supabase
+          .from('payments')
+          .update({
+            payment_status: details.paymentStatus,
+            ...(details.paymentStatus === 'PAID' ? { paid_at: now } : {}),
+            updated_at: now,
+          })
+          .eq('order_id', orderId);
+      }
 
       // Audit trail
       await supabase.from('order_status_history').insert({
@@ -1230,6 +1319,87 @@ class SupabaseSyncService {
     } finally {
       this.endSync();
     }
+  }
+
+  public async updateOrderPaymentStatus(
+    orderId: string,
+    paymentStatus: 'PAID' | 'FAILED' | 'PENDING',
+    utrNumber?: string
+  ): Promise<void> {
+    if (!isSupabaseConfigured || !orderId) return;
+    this.startSync();
+    try {
+      const now = new Date().toISOString();
+      await supabase
+        .from('orders')
+        .update({
+          payment_status: paymentStatus,
+          updated_at: now,
+        })
+        .eq('id', orderId);
+
+      const paymentUpdate: any = {
+        payment_status: paymentStatus,
+        updated_at: now,
+      };
+      if (utrNumber) paymentUpdate.transaction_id = utrNumber;
+      if (paymentStatus === 'PAID') paymentUpdate.paid_at = now;
+
+      await supabase.from('payments').update(paymentUpdate).eq('order_id', orderId);
+    } catch (err) {
+      console.warn('[Supabase] Error updating order payment status:', err);
+    } finally {
+      this.endSync();
+    }
+  }
+
+  /**
+   * Anti-Replay check: Verifies whether a 12-digit UPI UTR has already been used
+   * in any previous order in Supabase or local storage.
+   */
+  public async isUtrAlreadyUsed(utrNumber: string, excludeOrderId?: string): Promise<boolean> {
+    const cleanUtr = (utrNumber || '').trim();
+    if (!cleanUtr) return false;
+
+    // 1. Check local storage orders first
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('foodflow_customer_orders');
+        if (stored) {
+          const orders: Order[] = JSON.parse(stored);
+          const duplicateLocal = orders.some(
+            (o) =>
+              o.utrNumber === cleanUtr &&
+              o.id !== excludeOrderId &&
+              o.paymentStatus !== 'FAILED' &&
+              o.orderStatus !== 'CANCELLED'
+          );
+          if (duplicateLocal) return true;
+        }
+      }
+    } catch {}
+
+    if (!isSupabaseConfigured) return false;
+
+    // 2. Check Supabase payments table for existing transaction_id
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, order_id, payment_status')
+        .eq('transaction_id', cleanUtr)
+        .limit(5);
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const activeMatch = data.some(
+          (row) => row.order_id !== excludeOrderId && row.payment_status !== 'FAILED'
+        );
+        if (activeMatch) return true;
+      }
+    } catch (err) {
+      console.warn('[Supabase] Error checking UTR uniqueness:', err);
+    }
+
+    return false;
   }
 
   // ============================================================
@@ -1265,7 +1435,7 @@ class SupabaseSyncService {
         merchantRef: data.merchant_ref,
         qrCodeData: data.qr_code_data,
         upiIntentUrl: data.upi_intent_url,
-        utrNumber: data.utr_number,
+        utrNumber: data.utr_number || data.transaction_id,
         provider: data.provider,
         failureReason: data.failure_reason,
         rawPayload: data.raw_payload,
@@ -1292,24 +1462,13 @@ class SupabaseSyncService {
         id: paymentId,
         order_id: payment.orderId,
         payment_mode: payment.paymentMode || 'PAY_ONLINE',
-        payment_status: payment.paymentStatus || 'INITIATED',
+        payment_status: payment.paymentStatus || 'PENDING',
         amount: payment.amount ?? 0,
-        currency: payment.currency || 'INR',
+        transaction_id: payment.utrNumber || payment.transactionId || null,
+        provider: payment.provider || 'direct_upi_utr',
+        paid_at: payment.paidAt || null,
         updated_at: now,
       };
-
-      if (payment.shopId) dbPayment.shop_id = payment.shopId;
-      if (payment.customerId) dbPayment.customer_id = payment.customerId;
-      if (payment.transactionId) dbPayment.transaction_id = payment.transactionId;
-      if (payment.providerPaymentId) dbPayment.provider_payment_id = payment.providerPaymentId;
-      if (payment.providerOrderId) dbPayment.provider_order_id = payment.providerOrderId;
-      if (payment.qrCodeData) dbPayment.qr_code_data = payment.qrCodeData;
-      if (payment.upiIntentUrl) dbPayment.upi_intent_url = payment.upiIntentUrl;
-      if (payment.utrNumber) dbPayment.utr_number = payment.utrNumber;
-      if (payment.provider) dbPayment.provider = payment.provider;
-      if (payment.failureReason) dbPayment.failure_reason = payment.failureReason;
-      if (payment.paidAt) dbPayment.paid_at = payment.paidAt;
-      if (payment.rawPayload) dbPayment.raw_payload = payment.rawPayload;
 
       await supabase.from('payments').upsert(dbPayment);
     } catch (err) {

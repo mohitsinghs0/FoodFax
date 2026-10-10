@@ -80,12 +80,23 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     }
   };
 
-  const handleAction = async (action: 'ACCEPT' | 'PREPARE' | 'READY' | 'COMPLETE' | 'PAY_CASH') => {
+  const isUnverifiedOnlineUpi =
+    order.paymentMethod === 'PAY_ONLINE' &&
+    order.paymentStatus !== 'PAID' &&
+    order.orderStatus !== 'CANCELLED';
+
+  const handleAction = async (
+    action: 'ACCEPT' | 'PREPARE' | 'READY' | 'COMPLETE' | 'PAY_CASH' | 'VERIFY_UPI_ACCEPT' | 'REJECT_FAKE_UPI'
+  ) => {
     setLoadingAction(action);
     let updated: Order | null = null;
 
     try {
-      if (action === 'ACCEPT') {
+      if (action === 'VERIFY_UPI_ACCEPT') {
+        updated = await orderService.verifyOnlinePaymentAndAccept(order.id);
+      } else if (action === 'REJECT_FAKE_UPI') {
+        updated = await orderService.rejectFakeUpiPayment(order.id);
+      } else if (action === 'ACCEPT') {
         updated = await orderService.acceptOrder(order.id);
       } else if (action === 'PREPARE') {
         updated = await orderService.startPreparing(order.id);
@@ -183,7 +194,15 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             {order.paymentStatus === 'PAID' ? (
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1">
                 <Check className="w-3 h-3" />
-                PAID {order.paymentMethod === 'PAY_ONLINE' ? 'ONLINE' : 'CASH'}
+                PAID {order.paymentMethod === 'PAY_ONLINE' ? `UPI${order.utrNumber ? ` (${order.utrNumber.slice(-4)})` : ''}` : 'CASH'}
+              </span>
+            ) : order.paymentStatus === 'FAILED' ? (
+              <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                UPI REJECTED
+              </span>
+            ) : order.paymentMethod === 'PAY_ONLINE' ? (
+              <span className="text-[10px] font-extrabold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded animate-pulse">
+                ⚠️ VERIFY UPI ₹{order.total}
               </span>
             ) : (
               <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
@@ -222,6 +241,33 @@ export const OrderCard: React.FC<OrderCardProps> = ({
               </div>
             </div>
           )}
+
+          {/* Anti-Scam UPI Verification Alert Box for Shop Owner */}
+          {isUnverifiedOnlineUpi && (
+            <div className="mt-2.5 p-3 rounded-xl bg-amber-50 border-2 border-amber-400 text-amber-950 text-xs space-y-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-[11px] uppercase tracking-wide text-rose-700 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                  Check Your Bank / GPay Before Accepting!
+                </span>
+                <span className="font-black text-xs text-slate-900">₹{order.total}</span>
+              </div>
+              <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-amber-200">
+                <span className="text-[11px] text-slate-600 font-medium">Customer 12-Digit UTR:</span>
+                <span className="font-mono font-black text-slate-900 text-xs tracking-wider">
+                  {order.utrNumber || 'Not submitted'}
+                </span>
+              </div>
+              {order.utrNumber && (
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-amber-800">Match Last 4 Digits in GPay/PhonePe:</span>
+                  <span className="font-mono font-black text-sm px-2 py-0.5 rounded bg-amber-200 text-amber-950">
+                    {order.utrNumber.slice(-4)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -233,14 +279,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
           </span>
           <div className="flex items-center gap-2">
             <span className="text-base font-extrabold text-slate-900">₹{order.total}</span>
-            {order.paymentStatus !== 'PAID' && (
+            {order.paymentStatus !== 'PAID' && order.paymentMethod === 'CASH_AT_COUNTER' && (
               <button
                 onClick={() => handleAction('PAY_CASH')}
                 disabled={loadingAction !== null}
-                className="text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded-md transition-colors"
+                className="text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded-md transition-colors cursor-pointer"
                 title="Mark order as paid in cash"
               >
-                Mark Paid
+                Mark Cash Paid
               </button>
             )}
           </div>
@@ -248,12 +294,31 @@ export const OrderCard: React.FC<OrderCardProps> = ({
 
         {/* Dynamic Status Action Buttons */}
         <div className="flex items-center gap-2">
-          {order.orderStatus === 'PENDING' && (
+          {order.orderStatus === 'PENDING' && isUnverifiedOnlineUpi ? (
+            <>
+              <button
+                onClick={() => handleAction('REJECT_FAKE_UPI')}
+                disabled={loadingAction !== null}
+                className="flex-1 py-2.5 px-3 rounded-xl border-2 border-rose-300 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <XCircle className="w-4 h-4 shrink-0" />
+                <span>Fake UTR / Reject</span>
+              </button>
+              <button
+                onClick={() => handleAction('VERIFY_UPI_ACCEPT')}
+                disabled={loadingAction !== null}
+                className="flex-[1.8] py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4 shrink-0" />
+                <span>Verify ₹{order.total} UPI &amp; Accept</span>
+              </button>
+            </>
+          ) : order.orderStatus === 'PENDING' && (
             <>
               <button
                 onClick={() => setIsRejectModalOpen(true)}
                 disabled={loadingAction !== null}
-                className="flex-1 py-2.5 px-3 rounded-xl border border-rose-200 text-rose-700 font-bold text-xs hover:bg-rose-50 transition-colors flex items-center justify-center gap-1"
+                className="flex-1 py-2.5 px-3 rounded-xl border border-rose-200 text-rose-700 font-bold text-xs hover:bg-rose-50 transition-colors flex items-center justify-center gap-1 cursor-pointer"
               >
                 <XCircle className="w-4 h-4" />
                 <span>Reject</span>
@@ -261,7 +326,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
               <button
                 onClick={() => handleAction('ACCEPT')}
                 disabled={loadingAction !== null}
-                className="flex-[2] py-2.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
+                className="flex-[2] py-2.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
                 <span>Accept Order</span>

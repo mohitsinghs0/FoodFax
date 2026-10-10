@@ -1,5 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../supabase';
 import { PaymentRecord, PaymentStatus, UPIQRPayCreateResponse, UPIQRPayStatusResponse } from '../types';
+import { validateUpiUtr } from '../utils/orderValidation';
+import { firestoreSync } from './firestoreSyncService';
 
 export interface CreateUpiOrderParams {
   orderId: string;
@@ -98,21 +100,82 @@ export const paymentService = {
   },
 
   /**
-   * Sandbox simulation helper for instant testing
+   * Strictly validates a 12-digit NPCI UTR number, blocks duplicate UTRs in Supabase,
+   * and checks UPIQRPay gateway status before allowing order submission.
    */
-  async simulatePaymentSuccess(orderId: string, paymentId?: string): Promise<boolean> {
+  async verifyAndValidateUtr(params: {
+    utrNumber: string;
+    orderId?: string;
+    paymentId?: string;
+  }): Promise<{
+    valid: boolean;
+    verifiedByGateway: boolean;
+    cleanedUtr: string;
+    error?: string;
+  }> {
+    // 1. Strict client-side NPCI 12-digit RRN validation
+    const formatCheck = validateUpiUtr(params.utrNumber);
+    if (!formatCheck.valid) {
+      return {
+        valid: false,
+        verifiedByGateway: false,
+        cleanedUtr: formatCheck.cleaned,
+        error: formatCheck.error,
+      };
+    }
+
+    const cleanedUtr = formatCheck.cleaned;
+
+    // 2. Database Anti-Replay Check (prevent reusing an old UTR)
+    const alreadyUsed = await firestoreSync.isUtrAlreadyUsed(cleanedUtr, params.orderId);
+    if (alreadyUsed) {
+      return {
+        valid: false,
+        verifiedByGateway: false,
+        cleanedUtr,
+        error: 'This 12-digit UTR number has already been used for another order. Duplicate UTRs are blocked.',
+      };
+    }
+
+    // 3. Backend / Gateway verification check if available
     try {
-      const response = await fetch('/api/payment/simulate-success', {
+      const response = await fetch('/api/payment/verify-utr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId, payment_id: paymentId }),
+        body: JSON.stringify({
+          order_id: params.orderId,
+          payment_id: params.paymentId,
+          utr_number: cleanedUtr,
+        }),
       });
-      const data = await response.json();
-      return Boolean(data.success);
-    } catch (err) {
-      console.warn('[PaymentService] Simulation error:', err);
-      return false;
+
+      if (response.ok || response.status === 400) {
+        const json = await response.json();
+        if (json && json.success === false) {
+          return {
+            valid: false,
+            verifiedByGateway: false,
+            cleanedUtr,
+            error: json.message || 'UTR verification failed.',
+          };
+        }
+        if (json && json.success === true) {
+          return {
+            valid: true,
+            verifiedByGateway: Boolean(json.verifiedByGateway),
+            cleanedUtr,
+          };
+        }
+      }
+    } catch {
+      // Static deployment fallback: format + Supabase anti-replay check already passed
     }
+
+    return {
+      valid: true,
+      verifiedByGateway: false,
+      cleanedUtr,
+    };
   },
 
   /**
