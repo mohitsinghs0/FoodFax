@@ -171,19 +171,11 @@ export const CheckoutView: React.FC = () => {
 
   const grandTotal = subtotal;
 
-  // Online UPI is enabled via UPIQRPay (connected to BharatPe Business) or shop's UPI ID
-  const shopUpiVpa: string | null = shopDetails?.upiId?.trim() || null;
+  // Online UPI is enabled via UPIQRPay (connected to BharatPe Business)
   const shopHasUpi = shopDetails ? shopDetails.isOnlinePaymentEnabled !== false : true;
 
-  const directUpiUri = shopUpiVpa
-    ? `upi://pay?pa=${encodeURIComponent(shopUpiVpa)}&pn=${encodeURIComponent(shopName || 'FoodFax Stall')}&am=${grandTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent('Token Order ' + (pendingOrderId || 'FoodFax'))}`
-    : '';
-  const directQrImageUrl = shopUpiVpa
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(directUpiUri)}&margin=10`
-    : '';
-
-  const activeQrCodeUrl = upiData?.qrCode || directQrImageUrl;
-  const activeUpiLink = upiData?.upiLink || directUpiUri;
+  const activeQrCodeUrl = upiData?.qrCode || '';
+  const activeUpiLink = upiData?.upiLink || '';
 
   /**
    * Builds app-specific deep links for Google Pay, PhonePe, Paytm, or generic UPI
@@ -580,7 +572,7 @@ export const CheckoutView: React.FC = () => {
             {shopHasUpi ? (
               <>
                 <span className="inline-block mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
-                  UPI: {shopUpiVpa}
+                  Auto-Verify • Instant Token
                 </span>
                 <span className={`block mt-1 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
                   paymentMethod === 'PAY_ONLINE' ? 'bg-emerald-200/80 text-emerald-900' : 'bg-slate-100 text-slate-500'
@@ -749,8 +741,35 @@ export const CheckoutView: React.FC = () => {
                   </p>
                 </div>
               </div>
+            ) : !upiData ? (
+              /* 4A. GATEWAY INITIALIZATION ERROR / RETRY */
+              <div className="py-6 text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">Could Not Load UPI Gateway QR</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {merchantNotice || 'Unable to generate BharatPe / UPIQRPay dynamic QR right now.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePlaceOrder}
+                  className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs"
+                >
+                  Retry Generating UPI Payment
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwitchToCash}
+                  className="w-full py-1.5 text-center text-xs text-slate-500 hover:text-slate-800 font-medium transition-colors cursor-pointer"
+                >
+                  Prefer to pay at counter? Switch to Cash
+                </button>
+              </div>
             ) : (
-              /* 4. ACTIVE UPI GATEWAY SCREEN (Direct GPay / PhonePe / Paytm + Dynamic QR + Auto-Verify) */
+              /* 4B. ACTIVE UPI GATEWAY SCREEN (Direct GPay / PhonePe / Paytm + Dynamic QR + Auto-Verify) */
               <div className="space-y-3.5">
                 {/* Stall & Amount Header Card */}
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
@@ -758,7 +777,7 @@ export const CheckoutView: React.FC = () => {
                     <span className="block text-[10px] uppercase font-bold text-slate-400">Total To Pay</span>
                     <span className="text-xl font-black text-slate-900">₹{grandTotal}</span>
                     <span className="block text-[10px] font-semibold text-emerald-700 mt-0.5">
-                      {upiData?.paymentId ? '✓ UPIQRPay Auto-Verify Active' : shopUpiVpa ? `To: ${shopUpiVpa}` : 'Verified Merchant'}
+                      ✓ BharatPe / UPIQRPay Auto-Verify Active
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-slate-700 shadow-2xs">

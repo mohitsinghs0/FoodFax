@@ -19,28 +19,40 @@ export interface CreateUpiOrderResult {
   message?: string;
 }
 
+const DEFAULT_UPIQRPAY_KEY =
+  (import.meta as any).env?.VITE_UPIQRPAY_API_KEY || 'e8b41962-f509-4f57-9663-33ffd33e47a1';
+
 export const paymentService = {
   /**
-   * Initializes dynamic UPI QR generation via backend API
+   * Initializes dynamic UPI QR generation via backend API (with direct UPIQRPay fallback)
    */
   async createUpiOrder(params: CreateUpiOrderParams): Promise<CreateUpiOrderResult> {
+    const requestPayload = {
+      order_id: params.orderId,
+      customer_phone: params.customerPhone,
+      customer_name: params.customerName,
+      redirect_url: params.redirectUrl,
+      amount: params.amount,
+      shop_id: params.shopId,
+    };
+
     try {
       const response = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          order_id: params.orderId,
-          customer_phone: params.customerPhone,
-          customer_name: params.customerName,
-          redirect_url: params.redirectUrl,
-          amount: params.amount,
-          shop_id: params.shopId,
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
-      const json = await response.json();
+      const rawText = await response.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        json = null;
+      }
+
       if (json && json.data) {
         return {
           success: Boolean(json.success),
@@ -58,15 +70,70 @@ export const paymentService = {
           message: json.message,
         };
       }
-      return json;
+
+      if (json && json.success === false) {
+        return {
+          success: false,
+          code: json.code || 'UPI_GATEWAY_ERROR',
+          message: json.message || 'Could not initialize UPI payment order.',
+        };
+      }
     } catch (err: any) {
-      console.error('[PaymentService] Error creating UPI order:', err);
-      return {
-        success: false,
-        code: 'NETWORK_ERROR',
-        message: err?.message || 'Unable to connect to payment server. Please try again.',
-      };
+      console.warn('[PaymentService] Primary /api/payment/create-order failed, trying direct gateway:', err);
     }
+
+    // Fallback: Direct call to UPIQRPay if backend middleware/serverless returned HTML or failed
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://foodfax.in';
+      const phone = String(params.customerPhone || '9876543210').replace(/\D/g, '').slice(-10) || '9876543210';
+      const directRes = await fetch('https://upiqrpay.in/api/v1/order/create', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${DEFAULT_UPIQRPAY_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: Math.round(Number(params.amount || 1)),
+          order_id: String(params.orderId),
+          customer_name: params.customerName || 'FoodFax Customer',
+          customer_phone: phone,
+          redirect_url: params.redirectUrl || `${origin}/#/order/${params.orderId}`,
+          webhook_url: `${origin}/api/payment/webhook`,
+        }),
+      });
+
+      const directJson = await directRes.json().catch(() => null);
+      if (directJson && directJson.success && directJson.data) {
+        return {
+          success: true,
+          data: {
+            paymentId: directJson.data.payment_id,
+            orderId: directJson.data.order_id || params.orderId,
+            amount: directJson.data.amount || params.amount || 0,
+            qrCode: directJson.data.qr_code,
+            upiLink: directJson.data.upi_link,
+            payUrl: directJson.data.pay_url,
+            expiresAt: directJson.data.expires_at,
+            status: directJson.data.status || 'pending',
+          },
+        };
+      }
+      if (directJson && !directJson.success) {
+        return {
+          success: false,
+          code: directJson.code,
+          message: directJson.message,
+        };
+      }
+    } catch (fallbackErr: any) {
+      console.error('[PaymentService] Direct UPIQRPay fallback error:', fallbackErr);
+    }
+
+    return {
+      success: false,
+      code: 'GATEWAY_UNAVAILABLE',
+      message: 'Unable to reach UPI payment gateway right now. Please click Retry.',
+    };
   },
 
   /**
@@ -82,7 +149,14 @@ export const paymentService = {
       const response = await fetch(`/api/payment/status?${qs.toString()}`, {
         method: 'GET',
       });
-      const json = await response.json();
+      const rawText = await response.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(rawText);
+      } catch {
+        json = null;
+      }
+
       if (json && json.data) {
         return {
           success: Boolean(json.success),
@@ -97,11 +171,43 @@ export const paymentService = {
           message: json.message,
         };
       }
-      return json;
     } catch (err: any) {
-      console.error('[PaymentService] Error checking payment status:', err);
-      return { success: false, message: err?.message };
+      console.warn('[PaymentService] Primary status check failed, trying direct gateway:', err);
     }
+
+    // Fallback: Direct status check against UPIQRPay API
+    try {
+      const directRes = await fetch(`https://upiqrpay.in/api/v1/order/status/${paymentId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${DEFAULT_UPIQRPAY_KEY}`,
+        },
+      });
+      const directJson = await directRes.json().catch(() => null);
+      if (directJson && directJson.success && directJson.data) {
+        const remoteStatus = String(directJson.data.status || '').toLowerCase();
+        const isPaid =
+          remoteStatus === 'success' || remoteStatus === 'paid' || remoteStatus === 'completed';
+        const utr =
+          directJson.data.utr_number ||
+          directJson.data.utr ||
+          directJson.data.rrn ||
+          (isPaid ? paymentId : undefined);
+        return {
+          success: true,
+          data: {
+            paymentId,
+            orderId: directJson.data.order_id,
+            amount: directJson.data.amount,
+            status: (isPaid ? 'PAID' : remoteStatus.toUpperCase()) as any,
+            utrNumber: utr,
+            paidAt: directJson.data.paid_at,
+          },
+        };
+      }
+    } catch {}
+
+    return { success: false, message: 'Waiting for payment verification' };
   },
 
   /**

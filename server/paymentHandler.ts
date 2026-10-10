@@ -25,8 +25,14 @@ function getSupabaseServer() {
 
 /**
  * Helper to read raw JSON body from incoming HTTP request.
+ * Supports both pre-parsed req.body (Vercel Serverless / Express) and raw Node IncomingMessage streams (Vite).
  */
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage & { body?: any }): Promise<string> {
+  if (req.body !== undefined && req.body !== null) {
+    if (typeof req.body === 'string') return Promise.resolve(req.body);
+    if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body.toString('utf8'));
+    if (typeof req.body === 'object') return Promise.resolve(JSON.stringify(req.body));
+  }
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', (chunk) => {
