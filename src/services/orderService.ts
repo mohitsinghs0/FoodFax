@@ -1,9 +1,10 @@
 import { Order, OrderStatus } from '../types';
 import { INITIAL_ORDERS } from '../data/mockData';
-import { firestoreSync, normalizeOrderDoc, onDatabaseOrderCommitted } from './firestoreSyncService';
+import { firestoreSync, normalizeOrderDoc, onDatabaseOrderCommitted, MOCK_SHOP_IDS } from './firestoreSyncService';
 import { notificationService } from './notificationService';
 import { shopService } from './shopService';
 import { assertValidOrderSubmission } from '../utils/orderValidation';
+import { isSupabaseConfigured } from '../supabase';
 
 const ORDERS_STORAGE_KEY = 'foodflow_customer_orders';
 const ORDER_LISTENERS_MAP = new Map<string, Set<(order: Order) => void>>();
@@ -27,6 +28,7 @@ export const MOCK_ORDER_IDS = new Set<string>([
   'ord-1003',
   'ord-1004',
   'ord-1005',
+  ...INITIAL_ORDERS.map((o) => o.id),
 ]);
 
 export const orderService = {
@@ -34,11 +36,50 @@ export const orderService = {
     return false;
   },
 
+  /**
+   * Returns a Set of lowercase shop IDs & slugs that currently exist in the live Supabase database.
+   * If a shop has been deleted from the database, its ID will NOT be in this set.
+   */
+  async getValidLiveShopIdSet(): Promise<Set<string> | null> {
+    if (!isSupabaseConfigured) return null;
+    try {
+      const liveShops = await firestoreSync.getShops(true);
+      const validSet = new Set<string>();
+      for (const s of liveShops) {
+        if (s.id && !s.isDemo && !MOCK_SHOP_IDS.has(s.id)) {
+          validSet.add(String(s.id).trim().toLowerCase());
+        }
+        if (s.slug && !s.isDemo && !MOCK_SHOP_IDS.has(s.id)) {
+          validSet.add(String(s.slug).trim().toLowerCase());
+        }
+      }
+      return validSet;
+    } catch {
+      return null;
+    }
+  },
+
+  isOrderValidAndFromLiveShop(order: Order | null | undefined, validShopIds: Set<string> | null): boolean {
+    if (!order || !order.id) return false;
+    if (order.isDemo || MOCK_ORDER_IDS.has(order.id)) return false;
+    const rawShopId = String(order.shopId || '').trim();
+    if (!rawShopId || MOCK_SHOP_IDS.has(rawShopId)) return false;
+    if (validShopIds !== null) {
+      return validShopIds.has(rawShopId.toLowerCase());
+    }
+    return true;
+  },
+
   getStoredOrders(): Order[] {
     try {
       const stored = localStorage.getItem(ORDERS_STORAGE_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (o: Order) => o && o.id && !o.isDemo && !MOCK_ORDER_IDS.has(o.id) && !MOCK_SHOP_IDS.has(o.shopId)
+          );
+        }
       }
     } catch {
       // fallback
@@ -48,7 +89,10 @@ export const orderService = {
 
   saveOrders(orders: Order[]): void {
     try {
-      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+      const clean = orders.filter(
+        (o) => o && o.id && !o.isDemo && !MOCK_ORDER_IDS.has(o.id) && !MOCK_SHOP_IDS.has(o.shopId)
+      );
+      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(clean));
     } catch {
       // fallback
     }
@@ -75,23 +119,61 @@ export const orderService = {
       return [];
     }
 
-    // Fetch from remote & merge with local non-demo orders
+    // Fetch live customer orders and live shops in parallel so orders from deleted shops are excluded
     let remoteOrders: Order[] = [];
+    let remoteFetchSucceeded = false;
+    let validShopIds: Set<string> | null = null;
+
     try {
-      remoteOrders = await firestoreSync.getOrdersByCustomer(effectiveCustomerId);
+      const [fetchedOrders, fetchedShopIds] = await Promise.all([
+        firestoreSync.getOrdersByCustomer(effectiveCustomerId),
+        this.getValidLiveShopIdSet(),
+      ]);
+      remoteOrders = fetchedOrders;
+      validShopIds = fetchedShopIds;
+      remoteFetchSucceeded = true;
     } catch {
-      // fallback
+      validShopIds = await this.getValidLiveShopIdSet();
+    }
+
+    const storedOrders = this.getStoredOrders();
+
+    // Purge any stored orders whose shop was deleted from the database
+    if (validShopIds !== null) {
+      const prunedStored = storedOrders.filter((o) => {
+        if (!this.isOrderValidAndFromLiveShop(o, validShopIds)) return false;
+        // If remote fetch succeeded for this customer, only keep local orders that exist in remote
+        // OR were created in the last 15 seconds (in-flight creation)
+        if (remoteFetchSucceeded && o.customerId === effectiveCustomerId) {
+          const existsInRemote = remoteOrders.some((ro) => ro.id === o.id);
+          const ageMs = Date.now() - new Date(o.createdAt || 0).getTime();
+          if (!existsInRemote && ageMs > 15000) {
+            return false;
+          }
+        }
+        return true;
+      });
+      if (prunedStored.length !== storedOrders.length) {
+        this.saveOrders(prunedStored);
+      }
     }
 
     const localOrders = this.getStoredOrders().filter(
-      (o) => o.customerId === effectiveCustomerId && !o.isDemo && !MOCK_ORDER_IDS.has(o.id)
+      (o) => o.customerId === effectiveCustomerId && this.isOrderValidAndFromLiveShop(o, validShopIds)
     );
 
     const orderMap = new Map<string, Order>();
-    localOrders.forEach((o) => orderMap.set(o.id, o));
+    // Only seed from localOrders if remote fetch failed or order is brand-new in-flight
+    localOrders.forEach((o) => {
+      const ageMs = Date.now() - new Date(o.createdAt || 0).getTime();
+      if (!isSupabaseConfigured || !remoteFetchSucceeded || ageMs <= 15000) {
+        orderMap.set(o.id, o);
+      }
+    });
+
     remoteOrders.forEach((o) => {
-      if (!o.isDemo && !MOCK_ORDER_IDS.has(o.id)) {
-        const existing = orderMap.get(o.id);
+      if (this.isOrderValidAndFromLiveShop(o, validShopIds)) {
+        const existing = orderMap.get(o.id) || localOrders.find((lo) => lo.id === o.id);
         orderMap.set(o.id, {
           ...existing,
           ...o,
@@ -108,24 +190,47 @@ export const orderService = {
 
   async getShopOrders(shopId: string): Promise<Order[]> {
     await new Promise((r) => setTimeout(r, 30));
+    if (!shopId || MOCK_SHOP_IDS.has(shopId)) return [];
 
-    // Fetch live orders from remote and merge with local real orders for this shop
+    // Fetch live orders from remote and verify shop still exists
     let remoteOrders: Order[] = [];
+    let remoteFetchSucceeded = false;
+    let validShopIds: Set<string> | null = null;
     try {
-      remoteOrders = await firestoreSync.getOrdersByShop(shopId);
+      const [fetchedOrders, fetchedShopIds] = await Promise.all([
+        firestoreSync.getOrdersByShop(shopId),
+        this.getValidLiveShopIdSet(),
+      ]);
+      remoteOrders = fetchedOrders;
+      validShopIds = fetchedShopIds;
+      remoteFetchSucceeded = true;
     } catch {
-      // fallback
+      validShopIds = await this.getValidLiveShopIdSet();
+    }
+
+    // If shop was deleted from database, purge its local orders and return empty array
+    if (validShopIds !== null && !validShopIds.has(String(shopId).trim().toLowerCase())) {
+      const remaining = this.getStoredOrders().filter(
+        (o) => String(o.shopId || '').trim().toLowerCase() !== String(shopId).trim().toLowerCase()
+      );
+      this.saveOrders(remaining);
+      return [];
     }
 
     const localOrders = this.getStoredOrders().filter(
-      (o) => o.shopId === shopId && !o.isDemo && !MOCK_ORDER_IDS.has(o.id)
+      (o) => o.shopId === shopId && this.isOrderValidAndFromLiveShop(o, validShopIds)
     );
 
     const orderMap = new Map<string, Order>();
-    localOrders.forEach((o) => orderMap.set(o.id, o));
+    localOrders.forEach((o) => {
+      const ageMs = Date.now() - new Date(o.createdAt || 0).getTime();
+      if (!isSupabaseConfigured || !remoteFetchSucceeded || ageMs <= 15000) {
+        orderMap.set(o.id, o);
+      }
+    });
     remoteOrders.forEach((o) => {
-      if (!o.isDemo && !MOCK_ORDER_IDS.has(o.id)) {
-        const existing = orderMap.get(o.id);
+      if (this.isOrderValidAndFromLiveShop(o, validShopIds)) {
+        const existing = orderMap.get(o.id) || localOrders.find((lo) => lo.id === o.id);
         orderMap.set(o.id, {
           ...existing,
           ...o,
@@ -151,20 +256,33 @@ export const orderService = {
     );
   },
 
-  async getOrderHistory(shopId: string, filter: 'TODAY' | 'YESTERDAY' | 'ALL' = 'TODAY'): Promise<Order[]> {
+  async getOrderHistory(shopId: string, _filter: 'TODAY' | 'YESTERDAY' | 'ALL' = 'TODAY'): Promise<Order[]> {
     const all = await this.getShopOrders(shopId);
     return all.filter((o) => o.orderStatus === 'COMPLETED' || o.orderStatus === 'CANCELLED');
   },
 
   async getOrder(orderId: string): Promise<Order | null> {
+    if (!orderId || MOCK_ORDER_IDS.has(orderId)) return null;
     await new Promise((r) => setTimeout(r, 30));
     const orders = this.getStoredOrders();
     const localFound = orders.find((o) => o.id === orderId);
 
-    // Always try remote database first so live paymentStatus / orderStatus changes from Shop Owner are reflected
+    // Always try remote database first and verify that the order's shop still exists in Supabase
     try {
-      const remote = await firestoreSync.getOrder(orderId);
+      const [remote, validShopIds] = await Promise.all([
+        firestoreSync.getOrder(orderId),
+        this.getValidLiveShopIdSet(),
+      ]);
+
       if (remote) {
+        // If the shop for this order was deleted from the database, purge the order and return null
+        if (!this.isOrderValidAndFromLiveShop(remote, validShopIds)) {
+          if (localFound) {
+            this.saveOrders(orders.filter((o) => o.id !== orderId));
+          }
+          return null;
+        }
+
         const merged: Order = {
           ...localFound,
           ...remote,
@@ -180,15 +298,23 @@ export const orderService = {
         }
         return merged;
       }
+
+      // If Supabase is configured and the order does NOT exist in remote (unless created <15s ago), purge local & return null
+      if (isSupabaseConfigured) {
+        const ageMs = localFound ? Date.now() - new Date(localFound.createdAt || 0).getTime() : Infinity;
+        if (localFound && ageMs <= 15000 && this.isOrderValidAndFromLiveShop(localFound, validShopIds)) {
+          return localFound;
+        }
+        if (localFound) {
+          this.saveOrders(orders.filter((o) => o.id !== orderId));
+        }
+        return null;
+      }
     } catch {
-      // ignore and fall back to local
+      // ignore and fall back to local only if shop is still valid
     }
 
-    if (localFound) return localFound;
-
-    // Check INITIAL_ORDERS
-    const mockFound = INITIAL_ORDERS.find((o) => o.id === orderId);
-    if (mockFound) return mockFound;
+    if (!isSupabaseConfigured && localFound) return localFound;
 
     return null;
   },

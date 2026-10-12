@@ -61,6 +61,98 @@ async function hashPassword(password: string): Promise<string> {
   return `hash_${Math.abs(hash).toString(16)}`;
 }
 
+/**
+ * Validates password format:
+ * - Minimum 6 characters
+ * - At least 1 letter (A-Z or a-z)
+ * - At least 1 number (0-9)
+ * - No spaces
+ */
+export function validatePasswordFormat(password: string): {
+  isValid: boolean;
+  message?: string;
+  checks: {
+    minLength: boolean;
+    hasLetter: boolean;
+    hasNumber: boolean;
+    noSpaces: boolean;
+  };
+} {
+  const raw = password || '';
+  const checks = {
+    minLength: raw.length >= 6,
+    hasLetter: /[A-Za-z]/.test(raw),
+    hasNumber: /[0-9]/.test(raw),
+    noSpaces: raw.length > 0 && !/\s/.test(raw),
+  };
+
+  if (!raw) {
+    return { isValid: false, message: 'Please enter a password.', checks };
+  }
+  if (!checks.noSpaces) {
+    return { isValid: false, message: 'Password must not contain spaces.', checks };
+  }
+  if (!checks.minLength) {
+    return { isValid: false, message: 'Password must be at least 6 characters long.', checks };
+  }
+  if (!checks.hasLetter || !checks.hasNumber) {
+    return {
+      isValid: false,
+      message: 'Password must include at least 1 letter (A-Z) and 1 number (0-9).',
+      checks,
+    };
+  }
+
+  return { isValid: true, checks };
+}
+
+/**
+ * Validates whether input is a valid email address or 10-digit Indian mobile number
+ */
+export function validateEmailOrPhoneInput(input: string): {
+  isValid: boolean;
+  isEmail: boolean;
+  cleanEmail: string;
+  last10: string;
+  message?: string;
+} {
+  const trimmed = (input || '').trim();
+  if (!trimmed) {
+    return {
+      isValid: false,
+      isEmail: false,
+      cleanEmail: '',
+      last10: '',
+      message: 'Please enter your registered email or 10-digit mobile number.',
+    };
+  }
+
+  if (trimmed.includes('@')) {
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+    return {
+      isValid: emailValid,
+      isEmail: true,
+      cleanEmail: trimmed.toLowerCase(),
+      last10: '',
+      message: emailValid ? undefined : 'Please enter a valid email address (e.g. name@example.com).',
+    };
+  }
+
+  const digits = trimmed.replace(/\D/g, '');
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  const phoneValid =
+    (digits.length === 10 || (digits.length === 12 && digits.startsWith('91')) || (digits.length === 11 && digits.startsWith('0'))) &&
+    /^[6-9]\d{9}$/.test(last10);
+
+  return {
+    isValid: phoneValid,
+    isEmail: false,
+    cleanEmail: '',
+    last10,
+    message: phoneValid ? undefined : 'Please enter a valid 10-digit mobile number.',
+  };
+}
+
 export const DEMO_CUSTOMER: AuthUser = {
   id: 'demo-customer-001',
   fullName: 'Demo Customer',
@@ -545,276 +637,198 @@ class AuthService {
 
   /**
    * Login with Supabase Authentication or verified database credentials.
-   * Checks dedicated `customers` table first for customer accounts,
-   * then `users` table for owners/staff.
-   * Strictly enforces password verification.
+   * Strictly validates email/phone format and password match.
    */
   public async login(credentials: { emailOrPhone: string; password?: string }): Promise<{ user: AuthUser; business?: OwnerBusinessContext }> {
-    const rawInput = credentials.emailOrPhone.trim();
-    const password = credentials.password?.trim() || '';
+    const rawInput = (credentials.emailOrPhone || '').trim();
+    const password = credentials.password ?? '';
 
-    if (!rawInput) {
-      throw new Error('Please enter your email or mobile number.');
+    const inputValidation = validateEmailOrPhoneInput(rawInput);
+    if (!inputValidation.isValid) {
+      throw new Error(inputValidation.message || 'Please enter a valid email or 10-digit mobile number.');
     }
 
-    if (!password) {
+    if (!password || !password.trim()) {
       throw new Error('Please enter your password.');
     }
+    if (/\s/.test(password)) {
+      throw new Error('Password cannot contain spaces.');
+    }
+    if (password.length < 4) {
+      throw new Error('Password is too short. Please enter your valid password.');
+    }
 
+    const { isEmail: isEmailInput, cleanEmail, last10 } = inputValidation;
     const cleanDigits = rawInput.replace(/\D/g, '');
-    const isEmailInput = rawInput.includes('@');
-    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+    const hashedInput = await hashPassword(password);
 
+    const doesPasswordMatch = (stored: any): boolean => {
+      if (!stored || typeof stored !== 'string') return false;
+      return stored === password || stored === hashedInput;
+    };
 
-    // Check local registered users registry (for offline registrations)
+    // Check local registered users registry (for offline fallback)
     const localUsers = getLocalUsersRegistry();
     const matchedLocal = localUsers.find((entry) => {
       const u = entry.user;
-      const emailMatches = u.email && isEmailInput && u.email.toLowerCase() === rawInput.toLowerCase();
+      const emailMatches = Boolean(u.email && isEmailInput && u.email.toLowerCase() === cleanEmail);
       const phoneClean = u.phone ? u.phone.replace(/\D/g, '') : '';
-      const phoneMatches = phoneClean && last10 && (phoneClean.endsWith(last10) || last10.endsWith(phoneClean.slice(-10)));
+      const phoneMatches = Boolean(!isEmailInput && phoneClean && last10 && phoneClean.slice(-10) === last10);
       return emailMatches || phoneMatches;
     });
 
     // =========================================================================
-    // 1. FIRST CHECK DEDICATED `customers` TABLE
-    // =========================================================================
-    let dbCustomer: any = null;
-    if (isSupabaseConfigured) {
-      try {
-        if (isEmailInput) {
-          const { data, error } = await supabase
-            .from('customers')
-            .select('*')
-            .ilike('email', rawInput.toLowerCase())
-            .limit(1);
-          if (!error && data && data.length > 0) {
-            dbCustomer = data[0];
-          }
-        } else {
-          const phoneQueries = [
-            `phone.eq.${rawInput}`,
-            `phone.ilike.%${last10}%`,
-            `phone.eq.+91 ${last10}`,
-            `phone.eq.+91${last10}`,
-            `phone.eq.${cleanDigits}`
-          ];
-          const { data, error } = await supabase
-            .from('customers')
-            .select('*')
-            .or(phoneQueries.join(','))
-            .limit(1);
-          if (!error && data && data.length > 0) {
-            dbCustomer = data[0];
-          }
-        }
-      } catch (err) {
-        console.warn('[AuthService] Error querying customers table:', err);
-      }
-    }
-
-    if (dbCustomer) {
-      const dbStoredPassword = dbCustomer.password || dbCustomer.password_hash;
-      let passwordValid = false;
-
-      if (dbStoredPassword) {
-        const hashedInput = await hashPassword(password);
-        if (
-          dbStoredPassword === password ||
-          dbStoredPassword === password.trim() ||
-          dbStoredPassword === hashedInput
-        ) {
-          passwordValid = true;
-        }
-      }
-
-      // If not validated via stored password, attempt Supabase Auth check
-      if (!passwordValid && isSupabaseConfigured) {
-        const targetEmail = dbCustomer.email || (isEmailInput ? rawInput.toLowerCase() : `${last10}@foodflow.user`);
-        try {
-          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-            email: targetEmail,
-            password: password,
-          });
-          if (!authError && authData?.user) {
-            passwordValid = true;
-          }
-        } catch {}
-      }
-
-      // Also check local registry
-      if (!passwordValid && matchedLocal?.password) {
-        const hashedInput = await hashPassword(password);
-        if (
-          matchedLocal.password === password ||
-          matchedLocal.password === password.trim() ||
-          matchedLocal.password === hashedInput
-        ) {
-          passwordValid = true;
-        }
-      }
-
-      if (!passwordValid) {
-        throw new Error('Incorrect password. Please verify and try again.');
-      }
-
-      const userProfile = this.mapCustomerRowToAuthUser(dbCustomer, rawInput);
-      this.persistSession(userProfile, null);
-
-      // Auto-sync into users table for backwards-compatibility
-      try {
-        await supabase.from('users').upsert({
-          id: dbCustomer.id,
-          full_name: dbCustomer.full_name,
-          phone: dbCustomer.phone,
-          email: dbCustomer.email,
-          role: 'customer',
-          password: password,
-          photo_url: dbCustomer.photo_url,
-          area: dbCustomer.area,
-          city: dbCustomer.city,
-          latitude: dbCustomer.latitude,
-          longitude: dbCustomer.longitude,
-          profile_completed: dbCustomer.profile_completed ?? false,
-          is_active: dbCustomer.is_active !== false,
-          updated_at: new Date().toISOString(),
-        });
-      } catch {}
-
-      return { user: userProfile };
-    }
-
-    // =========================================================================
-    // 2. CHECK `users` TABLE (for owners, staff, admins, or existing users)
+    // 1. FETCH MATCHING ACCOUNT FROM `users` AND `customers` TABLES IN SUPABASE
     // =========================================================================
     let dbUser: any = null;
+    let dbCustomer: any = null;
+
     if (isSupabaseConfigured) {
       try {
         if (isEmailInput) {
-          const { data, error } = await supabase
-            .from('users')
-            .select('*')
-            .ilike('email', rawInput.toLowerCase())
-            .limit(1);
-          if (!error && data && data.length > 0) {
-            dbUser = data[0];
+          const [usersRes, custRes] = await Promise.all([
+            supabase.from('users').select('*').ilike('email', cleanEmail).limit(5),
+            supabase.from('customers').select('*').ilike('email', cleanEmail).limit(5),
+          ]);
+          if (!usersRes.error && usersRes.data && usersRes.data.length > 0) {
+            dbUser = usersRes.data.find((u) => u.role === 'owner') || usersRes.data[0];
           }
-        } else if (last10.length >= 10) {
-          const { data, error } = await supabase
-            .from('users')
-            .select('*')
-            .or(`phone.ilike.%${last10}%,phone.eq.${rawInput},email.ilike.${last10}@foodflow.user`)
-            .limit(1);
-          if (!error && data && data.length > 0) {
-            dbUser = data[0];
+          if (!custRes.error && custRes.data && custRes.data.length > 0) {
+            dbCustomer = custRes.data[0];
+          }
+        } else if (last10.length === 10) {
+          const [usersRes, custRes] = await Promise.all([
+            supabase.from('users').select('*').ilike('phone', `%${last10}%`).limit(5),
+            supabase.from('customers').select('*').ilike('phone', `%${last10}%`).limit(5),
+          ]);
+          if (!usersRes.error && usersRes.data && usersRes.data.length > 0) {
+            dbUser = usersRes.data.find((u) => u.role === 'owner') || usersRes.data[0];
+          } else {
+            // Also check synthetic email `<last10>@foodflow.user` in users table
+            const { data: synthUsers } = await supabase
+              .from('users')
+              .select('*')
+              .ilike('email', `${last10}@foodflow.user`)
+              .limit(1);
+            if (synthUsers && synthUsers.length > 0) {
+              dbUser = synthUsers[0];
+            }
+          }
+          if (!custRes.error && custRes.data && custRes.data.length > 0) {
+            dbCustomer = custRes.data[0];
           }
         }
       } catch (err) {
-        console.warn('[AuthService] Error querying users table:', err);
+        console.warn('[AuthService] Error querying user/customer tables:', err);
       }
     }
 
-    // 3. If dbUser found, strictly verify password
-    if (dbUser) {
-      const dbStoredPassword = dbUser.password || dbUser.password_hash || dbUser.pass || dbUser.pwd;
+    // =========================================================================
+    // 2. IF ACCOUNT EXISTS IN `users` OR `customers`, STRICTLY VERIFY PASSWORD
+    // =========================================================================
+    if (dbUser || dbCustomer) {
+      const userStoredPass = dbUser ? (dbUser.password || dbUser.password_hash || dbUser.pass || dbUser.pwd) : null;
+      const custStoredPass = dbCustomer ? (dbCustomer.password || dbCustomer.password_hash) : null;
+
       let passwordValid = false;
 
-      if (dbStoredPassword) {
-        const hashedInput = await hashPassword(password);
-        if (
-          dbStoredPassword === password ||
-          dbStoredPassword === password.trim() ||
-          dbStoredPassword === hashedInput
-        ) {
-          passwordValid = true;
-        }
+      if (doesPasswordMatch(userStoredPass) || doesPasswordMatch(custStoredPass)) {
+        passwordValid = true;
       }
 
-      // If database didn't have password column or didn't match, verify via Supabase Auth
+      // If no stored password matched yet, verify via Supabase Auth (auth.users)
       if (!passwordValid && isSupabaseConfigured) {
-        const targetEmail = dbUser.email || (isEmailInput ? rawInput.toLowerCase() : `${last10}@foodflow.user`);
-        try {
-          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-            email: targetEmail,
-            password: password,
-          });
+        const candidateEmails = Array.from(
+          new Set(
+            [
+              dbUser?.email,
+              dbCustomer?.email,
+              isEmailInput ? cleanEmail : `${last10}@foodflow.user`,
+            ].filter(Boolean) as string[]
+          )
+        );
 
-          if (!authError && authData?.user) {
-            passwordValid = true;
-            // Sync password to database table for consistency
+        for (const emailCandidate of candidateEmails) {
+          try {
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+              email: emailCandidate.toLowerCase().trim(),
+              password,
+            });
+            if (!authError && authData?.user) {
+              passwordValid = true;
+              break;
+            }
+          } catch {}
+        }
+
+        if (!passwordValid && !isEmailInput && last10.length === 10) {
+          const phoneVariants = [`+91${last10}`, `+91 ${last10}`, cleanDigits, rawInput];
+          for (const p of phoneVariants) {
             try {
-              await supabase.from('users').update({ password: password }).eq('id', dbUser.id);
-            } catch {}
-          } else if (!isEmailInput && last10.length >= 10) {
-            const phoneVariants = [`+91${last10}`, `+91 ${last10}`, cleanDigits, rawInput];
-            for (const p of phoneVariants) {
               const res = await supabase.auth.signInWithPassword({ phone: p, password });
               if (!res.error && res.data?.user) {
                 passwordValid = true;
                 break;
               }
-            }
+            } catch {}
           }
-        } catch {}
+        }
       }
 
-      // Also check local registry if available
-      if (!passwordValid && matchedLocal?.password) {
-        const hashedInput = await hashPassword(password);
-        if (
-          matchedLocal.password === password ||
-          matchedLocal.password === password.trim() ||
-          matchedLocal.password === hashedInput
-        ) {
+      // Only fall back to local registry if neither DB table had a stored password column populated
+      if (!passwordValid && !userStoredPass && !custStoredPass && matchedLocal?.password) {
+        if (doesPasswordMatch(matchedLocal.password)) {
           passwordValid = true;
         }
       }
 
-      // STRICT CHECK: If password failed to match, reject immediately!
       if (!passwordValid) {
-        throw new Error('Incorrect password. Please verify and try again.');
+        throw new Error('Incorrect password! Please enter the correct password for your account.');
       }
 
-      const userProfile = this.mapDbUserToAuthUser(dbUser, rawInput);
-      let business: OwnerBusinessContext | null = null;
-      if (userProfile.role === 'owner') {
-        business = await this.fetchOwnerShop(dbUser.id, userProfile.shopId);
-      } else if (userProfile.role === 'customer') {
-        // Automatically sync to customers table so customer is preserved in customers table
-        try {
-          await supabase.from('customers').upsert({
-            id: dbUser.id,
-            phone: dbUser.phone || rawInput,
-            password: password,
-            email: dbUser.email,
-            full_name: dbUser.full_name || 'Customer',
-            photo_url: dbUser.photo_url,
-            area: dbUser.area,
-            city: dbUser.city,
-            latitude: dbUser.latitude,
-            longitude: dbUser.longitude,
-            profile_completed: dbUser.profile_completed ?? false,
-            is_active: dbUser.is_active !== false,
-            created_at: dbUser.created_at || new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-        } catch {}
+      // Sync verified password across tables if one was missing
+      if (isSupabaseConfigured) {
+        if (dbUser && dbUser.password !== password) {
+          try {
+            await supabase.from('users').update({ password, updated_at: new Date().toISOString() }).eq('id', dbUser.id);
+          } catch {}
+        }
+        if (dbCustomer && dbCustomer.password !== password) {
+          try {
+            await supabase.from('customers').update({ password, updated_at: new Date().toISOString() }).eq('id', dbCustomer.id);
+          } catch {}
+        }
       }
 
-      this.persistSession(userProfile, business);
-      return { user: userProfile, business: business || undefined };
+      // If user is an owner in `users` table, return owner profile + business
+      if (dbUser && dbUser.role === 'owner') {
+        const ownerProfile = this.mapDbUserToAuthUser(dbUser, rawInput);
+        const business = await this.fetchOwnerShop(dbUser.id, ownerProfile.shopId);
+        this.persistSession(ownerProfile, business);
+        return { user: ownerProfile, business: business || undefined };
+      }
+
+      // Otherwise return customer profile (preferring `dbCustomer` or `dbUser`)
+      const userProfile = dbCustomer
+        ? this.mapCustomerRowToAuthUser(dbCustomer, rawInput)
+        : this.mapDbUserToAuthUser(dbUser, rawInput);
+
+      this.persistSession(userProfile, null);
+      return { user: userProfile };
     }
 
-    // 4. If dbUser was NOT found in public.users, check Supabase Auth (auth.users)
+    // =========================================================================
+    // 3. IF NOT IN `public.users` OR `public.customers`, CHECK SUPABASE AUTH
+    // =========================================================================
     if (isSupabaseConfigured) {
-      const targetEmail = isEmailInput ? rawInput.toLowerCase() : `${last10}@foodflow.user`;
+      const targetEmail = isEmailInput ? cleanEmail : `${last10}@foodflow.user`;
       let authUser: any = null;
       let authError: any = null;
 
       try {
         const { data: authData, error } = await supabase.auth.signInWithPassword({
           email: targetEmail,
-          password: password,
+          password,
         });
         if (!error && authData?.user) {
           authUser = authData.user;
@@ -823,21 +837,6 @@ class AuthService {
         }
       } catch (e: any) {
         authError = e;
-      }
-
-      // If phone, try phone auth variants
-      if (!authUser && !isEmailInput && last10.length >= 10) {
-        const phoneVariants = [`+91${last10}`, `+91 ${last10}`, cleanDigits, rawInput];
-        for (const p of phoneVariants) {
-          try {
-            const res = await supabase.auth.signInWithPassword({ phone: p, password });
-            if (!res.error && res.data?.user) {
-              authUser = res.data.user;
-              authError = null;
-              break;
-            }
-          } catch {}
-        }
       }
 
       if (authUser) {
@@ -861,7 +860,7 @@ class AuthService {
             id: uid,
             fullName: authUser.user_metadata?.full_name || targetEmail.split('@')[0],
             name: authUser.user_metadata?.full_name || targetEmail.split('@')[0],
-            phone: !isEmailInput ? rawInput : '',
+            phone: !isEmailInput ? `+91 ${last10}` : '',
             email: authUser.email || targetEmail,
             role: (authUser.user_metadata?.role as UserRole) || 'customer',
             isActive: true,
@@ -876,7 +875,7 @@ class AuthService {
               phone: userProfile.phone,
               email: targetEmail,
               role: userProfile.role,
-              password: password,
+              password,
               is_active: true,
               profile_completed: false,
             });
@@ -886,37 +885,20 @@ class AuthService {
         this.persistSession(userProfile, business);
         return { user: userProfile, business: business || undefined };
       }
-
-      // If Supabase Auth returned wrong credentials error
-      if (
-        authError &&
-        (authError.message?.toLowerCase().includes('invalid login credentials') ||
-         authError.message?.toLowerCase().includes('invalid password') ||
-         authError.message?.toLowerCase().includes('wrong password'))
-      ) {
-        throw new Error('Incorrect password. Please verify and try again.');
-      }
     }
 
-    // 5. Check Local Registered Users Registry (for offline/demo registrations)
+    // =========================================================================
+    // 4. OFFLINE / LOCAL REGISTRY CHECK
+    // =========================================================================
     if (matchedLocal) {
-      if (matchedLocal.password) {
-        const hashedInput = await hashPassword(password);
-        if (
-          matchedLocal.password === password ||
-          matchedLocal.password === password.trim() ||
-          matchedLocal.password === hashedInput
-        ) {
-          this.persistSession(matchedLocal.user, matchedLocal.business || null);
-          return { user: matchedLocal.user, business: matchedLocal.business || undefined };
-        } else {
-          throw new Error('Incorrect password. Please verify and try again.');
-        }
+      if (matchedLocal.password && doesPasswordMatch(matchedLocal.password)) {
+        this.persistSession(matchedLocal.user, matchedLocal.business || null);
+        return { user: matchedLocal.user, business: matchedLocal.business || undefined };
       }
+      throw new Error('Incorrect password! Please enter the correct password for your account.');
     }
 
-    // 6. User not found anywhere in database, auth or registered records
-    throw new Error('No account found for this mobile number or email. Please register first.');
+    throw new Error('No account found for this mobile number or email. Please Sign Up first.');
   }
 
   /**
@@ -949,30 +931,58 @@ class AuthService {
     const fullName = data.fullName.trim();
     const cleanPhone = data.phone.trim();
     const cleanDigits = cleanPhone.replace(/\D/g, '');
-    const password = data.password.trim();
+    const last10 = cleanDigits.slice(-10);
+    const password = data.password;
 
-    if (!fullName) {
-      throw new Error('Full name is required.');
+    if (!fullName || fullName.length < 2) {
+      throw new Error('Please enter your full name.');
     }
-    if (cleanDigits.length < 10) {
-      throw new Error('Enter a valid 10-digit phone number.');
+    if (cleanDigits.length < 10 || !/^[6-9]\d{9}$/.test(last10)) {
+      throw new Error('Please enter a valid 10-digit Indian mobile number.');
     }
-    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
-      throw new Error('Enter a valid email address.');
-    }
-    if (!password || password.length < 6) {
-      throw new Error('Password must contain at least 6 characters.');
+    if (data.email && data.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+      throw new Error('Please enter a valid email address.');
     }
 
-    const formattedPhone = cleanPhone.startsWith('+91')
-      ? cleanPhone
-      : `+91 ${cleanDigits.slice(-10)}`;
+    const pwdCheck = validatePasswordFormat(password);
+    if (!pwdCheck.isValid) {
+      throw new Error(pwdCheck.message || 'Password must be at least 6 characters with letters and numbers.');
+    }
 
+    const formattedPhone = `+91 ${last10}`;
     const emailToUse = data.email?.trim()
       ? data.email.trim().toLowerCase()
-      : `${cleanDigits.slice(-10)}@foodflow.user`;
+      : `${last10}@foodflow.user`;
 
-    let uid = `c_${Date.now()}_${cleanDigits.slice(-6)}`;
+    // Check if phone or email already registered in Supabase
+    if (isSupabaseConfigured) {
+      try {
+        const { data: existingCust } = await supabase
+          .from('customers')
+          .select('id, phone, email')
+          .ilike('phone', `%${last10}%`)
+          .limit(1);
+        if (existingCust && existingCust.length > 0) {
+          throw new Error('This mobile number is already registered. Please Sign In instead.');
+        }
+        if (data.email?.trim()) {
+          const { data: existingEmail } = await supabase
+            .from('customers')
+            .select('id, email')
+            .ilike('email', data.email.trim().toLowerCase())
+            .limit(1);
+          if (existingEmail && existingEmail.length > 0) {
+            throw new Error('This email address is already registered. Please Sign In instead.');
+          }
+        }
+      } catch (dupErr: any) {
+        if (dupErr?.message?.includes('already registered')) {
+          throw dupErr;
+        }
+      }
+    }
+
+    let uid = `c_${Date.now()}_${last10.slice(-6)}`;
 
     // 1. Sign up user via Supabase Auth (prefer admin for instant confirmation)
     let authSucceeded = false;
@@ -993,7 +1003,6 @@ class AuthService {
           uid = adminData.user.id;
           authSucceeded = true;
         } else if (adminErr && adminErr.message?.includes('already been registered')) {
-          // If already registered in auth, look up user ID
           const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
           const existing = listData?.users?.find((u) => u.email?.toLowerCase() === emailToUse.toLowerCase());
           if (existing) {
@@ -1058,7 +1067,7 @@ class AuthService {
       id: uid,
       phone: formattedPhone,
       password: password,
-      email: data.email?.trim() || null,
+      email: data.email?.trim() ? data.email.trim().toLowerCase() : null,
       full_name: fullName,
       photo_url: data.photoUrl || null,
       profile_completed: false,
@@ -1186,23 +1195,25 @@ class AuthService {
     const fullName = data.fullName.trim();
     const cleanPhone = data.phone.trim();
     const cleanDigits = cleanPhone.replace(/\D/g, '');
+    const last10 = cleanDigits.slice(-10);
     const email = data.email.trim().toLowerCase();
-    const password = data.password.trim();
+    const password = data.password;
 
     if (!fullName) {
       throw new Error('Full name is required.');
     }
-    if (cleanDigits.length < 10) {
-      throw new Error('Enter a valid 10-digit phone number.');
+    if (cleanDigits.length < 10 || !/^[6-9]\d{9}$/.test(last10)) {
+      throw new Error('Enter a valid 10-digit Indian mobile number.');
     }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new Error('Enter a valid email address.');
     }
-    if (!password || password.length < 6) {
-      throw new Error('Password must contain at least 6 characters.');
+    const pwdCheck = validatePasswordFormat(password);
+    if (!pwdCheck.isValid) {
+      throw new Error(pwdCheck.message || 'Password must be at least 6 characters with letters and numbers.');
     }
 
-    let uid = `owner_${Date.now()}_${cleanDigits.slice(-6)}`;
+    let uid = `owner_${Date.now()}_${last10.slice(-6)}`;
 
     try {
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -1230,7 +1241,7 @@ class AuthService {
       id: uid,
       fullName: fullName,
       name: fullName,
-      phone: cleanPhone.startsWith('+91') ? cleanPhone : `+91 ${cleanDigits.slice(-10)}`,
+      phone: `+91 ${last10}`,
       email: email,
       role: 'owner',
       profileCompleted: false,
@@ -1255,7 +1266,6 @@ class AuthService {
     try {
       const { error: insertErr } = await supabase.from('users').upsert(ownerPayload);
       if (insertErr && (insertErr.message?.includes('password') || insertErr.code === '42703')) {
-        // If password column does not exist in users table, upsert without password column
         const { password: _, ...fallbackPayload } = ownerPayload;
         await supabase.from('users').upsert(fallbackPayload);
       }
@@ -1269,7 +1279,7 @@ class AuthService {
   }
 
   /**
-   * Complete Setup Shop for Owner
+   * Complete Setup Shop for Owner (Zero demo items added!)
    */
   public async setupOwnerShop(data: {
     ownerName: string;
@@ -1304,7 +1314,7 @@ class AuthService {
       name: data.shopName.trim(),
       slug: data.shopName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       stall_type: stallType,
-      tagline: 'Fresh street food & quick counter pickup',
+      tagline: data.description.trim() || 'Fresh street food & quick counter pickup',
       description: data.description.trim() || `Welcome to ${data.shopName}. Serving fresh items with quick digital counter tokens.`,
       image: image,
       banner_image: image,
@@ -1325,10 +1335,11 @@ class AuthService {
       is_active: true,
       is_pure_veg: true,
       rating: 5.0,
-      total_reviews: 1,
+      total_reviews: 0,
       categories: ['snacks', 'fast-food'],
       preparation_time_minutes: '5–10',
       table_service_available: false,
+      is_demo: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -1387,10 +1398,10 @@ class AuthService {
       rating: dbShopRecord.rating,
     };
 
-    // 3. Register shop in local cache for instant discovery
+    // 3. Register shop in local cache for instant discovery (NO demo menu items created!)
     const createdShop: Shop = {
       id: shopId,
-      slug: shopId,
+      slug: dbShopRecord.slug,
       name: dbShopRecord.name,
       stallType: dbShopRecord.stall_type as any,
       tagline: dbShopRecord.description,
@@ -1414,42 +1425,12 @@ class AuthService {
       preparationTimeMinutes: '5–10',
       isPureVeg: true,
       tableServiceAvailable: false,
-      featuredItem: `${dbShopRecord.name} Signature`,
+      featuredItem: `${dbShopRecord.name} Special`,
       isDemo: false,
     };
 
     const currentShops = shopService.getStoredShops();
     shopService.saveStoredShops([createdShop, ...currentShops.filter((s) => s.id !== shopId)]);
-
-    // 4. Initialize starter items for the new shop
-    try {
-      await menuService.createItem({
-        shopId,
-        categoryId: 'cat-1',
-        name: `${dbShopRecord.name} Special Thali / Combo`,
-        description: 'Chef recommendation made fresh with authentic street flavors.',
-        price: 60,
-        image: dbShopRecord.image,
-        isAvailable: true,
-        isVeg: true,
-        isBestseller: true,
-        preparationTimeMin: 7,
-      });
-
-      await menuService.createItem({
-        shopId,
-        categoryId: 'cat-2',
-        name: 'Special Cutting Chai / Beverage',
-        description: 'Freshly brewed hot cutting tea.',
-        price: 15,
-        image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=600&q=80',
-        isAvailable: true,
-        isVeg: true,
-        preparationTimeMin: 3,
-      });
-    } catch {
-      // ignore
-    }
 
     saveLocalUserToRegistry(updatedUser, undefined, businessContext);
     this.persistSession(updatedUser, businessContext);
@@ -1617,74 +1598,87 @@ class AuthService {
     params: string | { emailOrPhone: string; newPassword?: string }
   ): Promise<{ success: boolean; message: string }> {
     const emailOrPhone = typeof params === 'string' ? params.trim() : params.emailOrPhone.trim();
-    const newPassword = typeof params === 'object' ? params.newPassword?.trim() : undefined;
+    const newPassword = typeof params === 'object' ? params.newPassword : undefined;
 
-    if (!emailOrPhone) {
-      throw new Error('Please enter your registered email or mobile number.');
+    const inputValidation = validateEmailOrPhoneInput(emailOrPhone);
+    if (!inputValidation.isValid) {
+      throw new Error(inputValidation.message || 'Please enter a valid registered email or 10-digit mobile number.');
     }
 
-    const cleanDigits = emailOrPhone.replace(/\D/g, '');
-    const isEmail = emailOrPhone.includes('@');
-    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+    const { isEmail, cleanEmail, last10 } = inputValidation;
 
-    // Direct password update
-    if (newPassword) {
-      if (newPassword.length < 4) {
-        throw new Error('Password must contain at least 4 characters.');
+    if (newPassword !== undefined) {
+      const pwdCheck = validatePasswordFormat(newPassword);
+      if (!pwdCheck.isValid) {
+        throw new Error(pwdCheck.message || 'Password must be at least 6 characters with letters and numbers.');
       }
 
-      // 1. Update in Supabase customers & users tables
+      let foundAnyAccount = false;
+
       if (isSupabaseConfigured) {
         try {
-          let custQuery = supabase.from('customers').update({
-            password: newPassword,
-            updated_at: new Date().toISOString(),
-          });
           if (isEmail) {
-            custQuery = custQuery.ilike('email', emailOrPhone.toLowerCase());
-          } else if (last10.length >= 10) {
-            custQuery = custQuery.ilike('phone', `%${last10}%`);
-          } else {
-            custQuery = custQuery.eq('phone', emailOrPhone);
+            const [uRes, cRes] = await Promise.all([
+              supabase.from('users').select('id').ilike('email', cleanEmail),
+              supabase.from('customers').select('id').ilike('email', cleanEmail),
+            ]);
+            if (uRes.data && uRes.data.length > 0) {
+              foundAnyAccount = true;
+              for (const row of uRes.data) {
+                await supabase
+                  .from('users')
+                  .update({ password: newPassword, updated_at: new Date().toISOString() })
+                  .eq('id', row.id);
+              }
+            }
+            if (cRes.data && cRes.data.length > 0) {
+              foundAnyAccount = true;
+              for (const row of cRes.data) {
+                await supabase
+                  .from('customers')
+                  .update({ password: newPassword, updated_at: new Date().toISOString() })
+                  .eq('id', row.id);
+              }
+            }
+          } else if (last10.length === 10) {
+            const [uRes, cRes] = await Promise.all([
+              supabase.from('users').select('id').ilike('phone', `%${last10}%`),
+              supabase.from('customers').select('id').ilike('phone', `%${last10}%`),
+            ]);
+            if (uRes.data && uRes.data.length > 0) {
+              foundAnyAccount = true;
+              for (const row of uRes.data) {
+                await supabase
+                  .from('users')
+                  .update({ password: newPassword, updated_at: new Date().toISOString() })
+                  .eq('id', row.id);
+              }
+            }
+            if (cRes.data && cRes.data.length > 0) {
+              foundAnyAccount = true;
+              for (const row of cRes.data) {
+                await supabase
+                  .from('customers')
+                  .update({ password: newPassword, updated_at: new Date().toISOString() })
+                  .eq('id', row.id);
+              }
+            }
           }
-          await custQuery;
         } catch (e) {
-          console.warn('[AuthService] Error updating password in customers table:', e);
-        }
-
-        try {
-          let updateQuery = supabase.from('users').update({
-            password: newPassword,
-            updated_at: new Date().toISOString(),
-          });
-          if (isEmail) {
-            updateQuery = updateQuery.ilike('email', emailOrPhone.toLowerCase());
-          } else if (last10.length >= 10) {
-            updateQuery = updateQuery.ilike('phone', `%${last10}%`);
-          } else {
-            updateQuery = updateQuery.eq('phone', emailOrPhone);
-          }
-          await updateQuery;
-        } catch (e) {
-          console.warn('[AuthService] Error updating password in users table:', e);
-        }
-
-        if (isEmail) {
-          try {
-            await supabase.auth.resetPasswordForEmail(emailOrPhone.toLowerCase());
-          } catch {}
+          console.warn('[AuthService] Error updating password in Supabase:', e);
         }
       }
 
-      // 2. Update in local registered users registry
+      // Also check and update local registered users registry
       try {
         const localUsers = getLocalUsersRegistry();
         const updated = localUsers.map((entry) => {
           const u = entry.user;
-          const emailMatches = u.email && isEmail && u.email.toLowerCase() === emailOrPhone.toLowerCase();
+          const emailMatches = Boolean(u.email && isEmail && u.email.toLowerCase() === cleanEmail);
           const phoneClean = u.phone ? u.phone.replace(/\D/g, '') : '';
-          const phoneMatches = phoneClean && last10 && (phoneClean.endsWith(last10) || last10.endsWith(phoneClean.slice(-10)));
+          const phoneMatches = Boolean(!isEmail && phoneClean && last10 && phoneClean.slice(-10) === last10);
           if (emailMatches || phoneMatches) {
+            foundAnyAccount = true;
             return { ...entry, password: newPassword };
           }
           return entry;
@@ -1692,22 +1686,19 @@ class AuthService {
         localStorage.setItem(LOCAL_USERS_REGISTRY_KEY, JSON.stringify(updated));
       } catch {}
 
+      if (!foundAnyAccount) {
+        throw new Error('No registered account found with this mobile number or email.');
+      }
+
       return {
         success: true,
-        message: 'Password has been updated successfully! You can now log in with your new password.',
+        message: 'Password updated successfully! You can now sign in with your new password.',
       };
-    }
-
-    // Default request instructions
-    if (isEmail && isSupabaseConfigured) {
-      try {
-        await supabase.auth.resetPasswordForEmail(emailOrPhone.toLowerCase());
-      } catch {}
     }
 
     return {
       success: true,
-      message: `Password reset verification for ${emailOrPhone} ready. Enter your new password to complete reset.`,
+      message: `Password reset ready for ${emailOrPhone}. Enter your new password to complete reset.`,
     };
   }
 }

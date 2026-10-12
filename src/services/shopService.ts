@@ -19,8 +19,7 @@ const ALL_SHOPS_LISTENERS = new Set<(shops: Shop[]) => void>();
 export const INITIAL_REAL_SHOPS: Shop[] = [];
 
 /**
- * Checks whether a shop is suspended, inactive, or pending KYC approval.
- * Suspended or unverified/pending KYC shops are hidden from the customer dashboard.
+ * Checks whether a shop is explicitly suspended, inactive, blocked, or rejected.
  */
 export function isShopSuspendedOrKycPending(shop: any): boolean {
   if (!shop) return false;
@@ -35,15 +34,15 @@ export function isShopSuspendedOrKycPending(shop: any): boolean {
     return true;
   }
 
-  // 3. Status string check
+  // 3. Status string check (only block explicitly suspended/inactive/blocked/rejected)
   const status = String(shop.status || shop.shop_status || '').toLowerCase().trim();
-  if (['suspended', 'pending_kyc', 'kyc_pending', 'inactive', 'blocked', 'rejected'].includes(status)) {
+  if (['suspended', 'inactive', 'blocked', 'rejected'].includes(status)) {
     return true;
   }
 
-  // 4. KYC status check
+  // 4. KYC status check (only block if explicitly rejected/suspended/blocked)
   const kycStatus = String(shop.kycStatus || shop.kyc_status || '').toLowerCase().trim();
-  if (['pending', 'in_review', 'under_review', 'submitted', 'rejected', 'unverified'].includes(kycStatus)) {
+  if (['rejected', 'suspended', 'blocked'].includes(kycStatus)) {
     return true;
   }
 
@@ -68,44 +67,48 @@ export const shopService = {
   },
 
   getStoredShops(isRealUser?: boolean): Shop[] {
-    if (memoryStoredShopsCache) {
-      return memoryStoredShopsCache;
-    }
-
     const deletedRaw = typeof window !== 'undefined' ? localStorage.getItem('foodflow_deleted_shops') : null;
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
 
     try {
-      const stored = localStorage.getItem(SHOPS_STORAGE_KEY) || localStorage.getItem('foodflow_shops');
-      if (stored) {
-        const parsed: Shop[] = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const map = new Map<string, Shop>();
-          // Custom / registered stalls from local storage (must have valid id and name, never demo, never deleted, never suspended/kyc-pending)
-          parsed.forEach((s) => {
-            if (
-              s && 
-              s.id && 
-              s.name && 
-              !s.isDemo && 
-              !MOCK_SHOP_IDS.has(s.id) && 
-              s.id !== 'shop-411159' && 
-              s.slug !== 'deepak-chinese-corner' && 
-              !deletedSet.has(s.id) && 
-              !isShopSuspendedOrKycPending(s) && 
-              !map.has(s.id)
-            ) {
-              map.set(s.id, s);
-            }
-          });
+      const rawPrimary = typeof window !== 'undefined' ? localStorage.getItem('foodflow_shops') : null;
+      const rawSecondary = typeof window !== 'undefined' ? localStorage.getItem(SHOPS_STORAGE_KEY) : null;
+      const listPrimary: Shop[] = rawPrimary ? JSON.parse(rawPrimary) : [];
+      const listSecondary: Shop[] = rawSecondary ? JSON.parse(rawSecondary) : [];
+      const combined = [
+        ...(Array.isArray(listPrimary) ? listPrimary : []),
+        ...(Array.isArray(listSecondary) ? listSecondary : []),
+      ];
 
-          const cleanList = Array.from(map.values());
-          memoryStoredShopsCache = cleanList;
-          return cleanList;
-        }
+      if (combined.length > 0) {
+        const map = new Map<string, Shop>();
+        combined.forEach((s) => {
+          if (
+            s && 
+            s.id && 
+            s.name && 
+            !s.isDemo && 
+            !MOCK_SHOP_IDS.has(s.id) && 
+            s.id !== 'shop-411159' && 
+            s.slug !== 'deepak-chinese-corner' && 
+            !deletedSet.has(s.id) && 
+            !isShopSuspendedOrKycPending(s) && 
+            !map.has(s.id)
+          ) {
+            map.set(s.id, s);
+          }
+        });
+
+        const cleanList = Array.from(map.values());
+        memoryStoredShopsCache = cleanList;
+        return cleanList;
       }
     } catch {
       // fallback
+    }
+
+    if (memoryStoredShopsCache && memoryStoredShopsCache.length > 0) {
+      return memoryStoredShopsCache;
     }
 
     if (!isSupabaseConfigured) {
@@ -118,7 +121,9 @@ export const shopService = {
   saveStoredShops(shops: Shop[]): void {
     memoryStoredShopsCache = shops;
     try {
-      localStorage.setItem(SHOPS_STORAGE_KEY, JSON.stringify(shops));
+      const serialized = JSON.stringify(shops);
+      localStorage.setItem(SHOPS_STORAGE_KEY, serialized);
+      localStorage.setItem('foodflow_shops', serialized);
     } catch {
       // fallback
     }
@@ -202,23 +207,29 @@ export const shopService = {
     const deletedRaw = typeof window !== 'undefined' ? localStorage.getItem('foodflow_deleted_shops') : null;
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
 
-    try {
-      // Fetch shops from database
-      const remoteShops = await firestoreSync.getShops(isRealUser);
-      if (isSupabaseConfigured && remoteShops && remoteShops.length > 0) {
-        shops = remoteShops.filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+    if (isSupabaseConfigured) {
+      try {
+        const remoteShops = await firestoreSync.getShops(isRealUser);
+        shops = (remoteShops || []).filter(
+          (s) =>
+            !s.isDemo &&
+            !MOCK_SHOP_IDS.has(s.id) &&
+            !MOCK_SHOP_IDS.has(s.slug) &&
+            !deletedSet.has(s.id) &&
+            !isShopSuspendedOrKycPending(s)
+        );
+        // Sync localStorage with exact live database list (even if empty when all shops are deleted)
+        this.saveStoredShops(shops);
+      } catch {
+        shops = [];
       }
+    } else {
+      shops = this.getStoredShops(isRealUser).filter(
+        (s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s)
+      );
       if (shops.length === 0) {
-        shops = this.getStoredShops(isRealUser).filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+        shops = MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
       }
-    } catch {
-      shops = this.getStoredShops(isRealUser).filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
-    }
-
-    // Graceful fallback: If no live stalls exist (e.g. fresh clone, unconfigured Supabase or empty cloud DB),
-    // display verified default stalls from MOCK_SHOPS so the user is never left with an empty app
-    if (shops.length === 0) {
-      shops = MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
     }
 
     const loc = userLocation || DEFAULT_CUSTOMER_LOCATION;
@@ -240,7 +251,7 @@ export const shopService = {
       return s;
     });
 
-    // Strictly filter out any suspended or pending KYC stalls
+    // Strictly filter out any suspended stalls
     shops = shops.filter((s) => !isShopSuspendedOrKycPending(s));
 
     // Sort by nearest distance first
@@ -290,19 +301,28 @@ export const shopService = {
       return null;
     }
 
-    // 1. Try fetching from database if configured
+    // 1. If Supabase is configured, strictly use live database
     if (isSupabaseConfigured) {
       try {
         const remoteShop = await firestoreSync.getShop(cleanId);
-        if (remoteShop && !remoteShop.isDemo && !deletedSet.has(remoteShop.id) && !isShopSuspendedOrKycPending(remoteShop)) {
+        if (
+          remoteShop &&
+          !remoteShop.isDemo &&
+          !MOCK_SHOP_IDS.has(remoteShop.id) &&
+          !MOCK_SHOP_IDS.has(remoteShop.slug) &&
+          !deletedSet.has(remoteShop.id) &&
+          !isShopSuspendedOrKycPending(remoteShop)
+        ) {
           return remoteShop;
         }
+        return null;
       } catch (err) {
-        console.warn('[shopService] Remote getShop error, falling back to local:', err);
+        console.warn('[shopService] Remote getShop error:', err);
+        return null;
       }
     }
 
-    // 2. Check local stored shops (custom registered shops and catalog)
+    // 2. Offline / non-Supabase fallback
     const shops = this.getStoredShops(isRealUser);
     const found = shops.find(
       (s) =>
@@ -312,35 +332,6 @@ export const shopService = {
     );
     if (found && !deletedSet.has(found.id) && !isShopSuspendedOrKycPending(found)) return found;
 
-    // 3. Match stripped alphanumeric characters
-    const cleanAlpha = cleanId.replace(/[^a-z0-9]/g, '');
-    const alphaFound = shops.find(
-      (s) =>
-        s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha ||
-        s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha ||
-        s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha
-    );
-    if (alphaFound && !deletedSet.has(alphaFound.id)) return alphaFound;
-
-    // 4. Check INITIAL_REAL_SHOPS explicitly
-    const realFound = INITIAL_REAL_SHOPS.find(
-      (s) =>
-        (s.id && s.id.toLowerCase() === cleanId) ||
-        (s.slug && s.slug.toLowerCase() === cleanId) ||
-        (s.name && s.name.toLowerCase() === cleanId)
-    );
-    if (realFound && !deletedSet.has(realFound.id)) return realFound;
-
-    // 5. Fallback to MOCK_SHOPS
-    const mockFound = MOCK_SHOPS.find(
-      (s) =>
-        (s.id && s.id.toLowerCase() === cleanId) ||
-        (s.slug && s.slug.toLowerCase() === cleanId) ||
-        (s.name && s.name.toLowerCase() === cleanId)
-    );
-    if (mockFound && !deletedSet.has(mockFound.id)) return mockFound;
-
-    // If not found, return null so caller can handle accurately
     return null;
   },
 

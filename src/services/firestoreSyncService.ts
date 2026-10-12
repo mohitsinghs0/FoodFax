@@ -67,11 +67,11 @@ export const MOCK_SHOP_IDS = new Set<string>([
   'delhi-chaat-hub',
   'ahmedabad-farsan-stall',
   'bengaluru-filter-coffee',
+  'bangalore-tiffin',
 ]);
 
 /**
- * Checks whether a shop is suspended, inactive, or pending KYC approval.
- * Suspended or unverified/pending KYC shops are hidden from the customer dashboard.
+ * Checks whether a shop is explicitly suspended, inactive, blocked, or rejected.
  */
 export function isShopSuspendedOrKycPending(shop: any): boolean {
   if (!shop) return false;
@@ -86,18 +86,39 @@ export function isShopSuspendedOrKycPending(shop: any): boolean {
     return true;
   }
 
-  // 3. Status string check
+  // 3. Status string check (only block explicitly suspended/inactive/blocked/rejected)
   const status = String(shop.status || shop.shop_status || '').toLowerCase().trim();
-  if (['suspended', 'pending_kyc', 'kyc_pending', 'inactive', 'blocked', 'rejected'].includes(status)) {
+  if (['suspended', 'inactive', 'blocked', 'rejected'].includes(status)) {
     return true;
   }
 
-  // 4. KYC status check
+  // 4. KYC status check (only block if explicitly rejected/suspended/blocked)
   const kycStatus = String(shop.kycStatus || shop.kyc_status || '').toLowerCase().trim();
-  if (['pending', 'in_review', 'under_review', 'submitted', 'rejected', 'unverified'].includes(kycStatus)) {
+  if (['rejected', 'suspended', 'blocked'].includes(kycStatus)) {
     return true;
   }
 
+  return false;
+}
+
+export function isFakeOrDefaultMenuItem(item: any): boolean {
+  if (!item || !item.id) return true;
+  if (item.isDemo === true || item.is_demo === true) return true;
+  const id = String(item.id).trim();
+  const sid = String(item.shopId || item.shop_id || '').trim();
+  if (MOCK_SHOP_IDS.has(sid)) return true;
+  if (/-item-[1-6]$/.test(id)) return true;
+  if (/^(svp|cc|msc|tth|ss|fjp|pkp|pvp|dch|bt)-\d+$/i.test(id)) return true;
+
+  const name = String(item.name || '').toLowerCase().trim();
+  const desc = String(item.description || '').toLowerCase().trim();
+  if (
+    desc === 'chef recommendation made fresh with authentic street flavors.' ||
+    (name === 'special cutting chai / beverage' && desc === 'freshly brewed hot cutting tea.') ||
+    name.endsWith('special thali / combo')
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -632,24 +653,56 @@ class SupabaseSyncService {
   }
 
   public async getShop(shopIdOrSlug: string): Promise<Shop | null> {
-    if (!isSupabaseConfigured || !shopIdOrSlug) return null;
+    if (!shopIdOrSlug) return null;
+    const clean = decodeURIComponent(String(shopIdOrSlug)).trim().replace(/^\/shop\//, '').replace(/\/$/, '');
+    const cleanLower = clean.toLowerCase();
+    const cleanAlpha = cleanLower.replace(/[^a-z0-9]/g, '');
+
+    const matchesShop = (s: Shop) => {
+      if (!s) return false;
+      const sId = (s.id || '').toLowerCase().trim();
+      const sSlug = (s.slug || '').toLowerCase().trim();
+      const sName = (s.name || '').toLowerCase().trim();
+      if (sId === cleanLower || sSlug === cleanLower || sName === cleanLower) return true;
+      if (cleanAlpha) {
+        if (
+          sId.replace(/[^a-z0-9]/g, '') === cleanAlpha ||
+          sSlug.replace(/[^a-z0-9]/g, '') === cleanAlpha ||
+          sName.replace(/[^a-z0-9]/g, '') === cleanAlpha
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // 1. Instant check in memory cache (0ms)
+    if (this.cachedShops && this.cachedShops.length > 0) {
+      const cachedMatch = this.cachedShops.find(matchesShop);
+      if (cachedMatch) return cachedMatch;
+    }
+
+    if (!isSupabaseConfigured) return null;
+
     this.startSync();
     try {
-      const clean = String(shopIdOrSlug).trim();
-      const queryPromise = supabase
+      // 2. Check via getShops() which uses safe select('*') without fragile .or()/.maybeSingle() errors
+      const allShops = await this.getShops();
+      const matchedFromAll = allShops.find(matchesShop);
+      if (matchedFromAll) return matchedFromAll;
+
+      // 3. Direct fallback query on shops table
+      const { data, error } = await supabase
         .from('shops')
-        .select('*')
-        .or(`id.eq.${clean},slug.eq.${clean}`)
-        .maybeSingle();
+        .select('*');
 
-      const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
-        setTimeout(() => resolve({ data: null, error: new Error('Query timed out') }), 4500)
-      );
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const normalizedAll = data.map((d) => normalizeShopDoc(d));
+        const directMatch = normalizedAll.find(matchesShop);
+        if (directMatch) return directMatch;
+      }
 
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-
-      if (error || !data) return null;
-      return normalizeShopDoc(data);
+      return null;
     } catch (err) {
       console.warn('[Supabase] Error getting shop:', err);
       return null;
@@ -663,11 +716,31 @@ class SupabaseSyncService {
     this.startSync();
     try {
       if (isSupabaseConfigured) {
+        // Delete child rows (orders, menu_items, shop_categories) and the shop itself
+        await Promise.allSettled([
+          supabase.from('orders').delete().eq('shop_id', shopId),
+          supabase.from('menu_items').delete().eq('shop_id', shopId),
+          supabase.from('shop_categories').delete().eq('shop_id', shopId),
+        ]);
         const { error } = await supabase.from('shops').delete().eq('id', shopId);
         if (error) {
           console.warn('[Supabase] Delete shop error:', error);
         }
       }
+      // Also purge any local cached orders belonging to this deleted shop
+      try {
+        const storedOrdersRaw = localStorage.getItem('foodflow_customer_orders');
+        if (storedOrdersRaw) {
+          const parsedOrders = JSON.parse(storedOrdersRaw);
+          if (Array.isArray(parsedOrders)) {
+            const targetLower = shopId.trim().toLowerCase();
+            const filtered = parsedOrders.filter(
+              (o: Order) => String(o?.shopId || '').trim().toLowerCase() !== targetLower
+            );
+            localStorage.setItem('foodflow_customer_orders', JSON.stringify(filtered));
+          }
+        }
+      } catch {}
       this.invalidateShopsCache();
       return true;
     } catch (err) {
@@ -715,48 +788,36 @@ class SupabaseSyncService {
           .from('shops')
           .select('*');
 
-        if (!error && remoteShops && remoteShops.length > 0) {
-          // Return live shops present in the database
+        if (!error && Array.isArray(remoteShops)) {
+          // Return live shops present in the database (even if 0 shops when all are deleted)
           const liveShops = remoteShops
             .map((d) => normalizeShopDoc(d))
-            .filter((s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+            .filter(
+              (s) =>
+                !s.isDemo &&
+                !MOCK_SHOP_IDS.has(s.id) &&
+                !MOCK_SHOP_IDS.has(s.slug) &&
+                !deletedSet.has(s.id) &&
+                !isShopSuspendedOrKycPending(s)
+            );
 
-          if (liveShops.length > 0) {
-            this.cachedShops = liveShops;
-            this.lastShopsFetchTime = Date.now();
+          this.cachedShops = liveShops;
+          this.lastShopsFetchTime = Date.now();
 
-            try {
-              localStorage.setItem('foodflow_shops', JSON.stringify(liveShops));
-            } catch {}
+          try {
+            localStorage.setItem('foodflow_shops', JSON.stringify(liveShops));
+            localStorage.setItem('foodflow_shops_list', JSON.stringify(liveShops));
+            localStorage.removeItem('foodflow_registered_shops');
+          } catch {}
 
-            return liveShops;
-          }
+          return liveShops;
         }
 
-        if (this.cachedShops && this.cachedShops.length > 0) return this.cachedShops;
-        try {
-          const stored = localStorage.getItem('foodflow_shops') || localStorage.getItem('foodflow_shops_list');
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              const customOnly = parsed.filter((s: Shop) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
-              if (customOnly.length > 0) return customOnly;
-            }
-          }
-        } catch {}
-        return MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
+        if (this.cachedShops) return this.cachedShops;
+        return [];
       } catch (err) {
-        console.warn('[Supabase] Error getting shops, using fallback:', err);
-        if (this.cachedShops && this.cachedShops.length > 0) return this.cachedShops;
-        try {
-          const stored = localStorage.getItem('foodflow_shops') || localStorage.getItem('foodflow_shops_list');
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              return parsed.filter((s: Shop) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
-            }
-          }
-        } catch {}
+        console.warn('[Supabase] Error getting shops:', err);
+        if (this.cachedShops) return this.cachedShops;
         return [];
       } finally {
         this.shopsInflightPromise = null;
@@ -890,7 +951,7 @@ class SupabaseSyncService {
   public async createMenuItem(item: MenuItem): Promise<void> {
     this.startSync();
     try {
-      await supabase.from('menu_items').upsert({
+      const basePayload: any = {
         id: item.id,
         shop_id: item.shopId,
         category_id: item.categoryId,
@@ -902,10 +963,19 @@ class SupabaseSyncService {
         is_available: item.isAvailable,
         is_bestseller: item.isBestseller ?? false,
         preparation_time_min: item.preparationTimeMin ?? 5,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from('menu_items').upsert({
+        ...basePayload,
         preparation_minutes: item.preparationMinutes || '5-10',
         customization_options: item.customizationOptions || [],
-        updated_at: new Date().toISOString(),
       });
+
+      if (error) {
+        // Fallback if optional columns do not exist in the Supabase menu_items table
+        await supabase.from('menu_items').upsert(basePayload);
+      }
     } catch (err) {
       console.warn('[Supabase] Error creating menu item:', err);
     } finally {
@@ -919,7 +989,12 @@ class SupabaseSyncService {
       if (typeof localStorage !== 'undefined') {
         const stored = localStorage.getItem('foodflow_menu_items');
         if (stored) {
-          localItems = JSON.parse(stored);
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            localItems = isSupabaseConfigured
+              ? parsed.filter((i) => !isFakeOrDefaultMenuItem(i))
+              : parsed;
+          }
         }
       }
     } catch {
@@ -946,7 +1021,7 @@ class SupabaseSyncService {
 
       const mergedMap = new Map<string, MenuItem>();
       fallbackMocks.forEach((i) => mergedMap.set(i.id, i));
-      filteredLocal.forEach((i) => mergedMap.set(i.id, i)); // Local additions take precedence!
+      filteredLocal.forEach((i) => mergedMap.set(i.id, i));
 
       const localResult = Array.from(mergedMap.values());
       if (localResult.length > 0) return localResult;
@@ -956,26 +1031,36 @@ class SupabaseSyncService {
 
     this.startSync();
     try {
-      // Select specific columns to bypass base64 image bottlenecks
-      let query = supabase
-        .from('menu_items')
-        .select('id, shop_id, category_id, name, description, price, image, is_available, is_veg, is_bestseller, preparation_time_min, preparation_minutes, customization_options');
-
-      if (shopId && slug && shopId.toLowerCase() !== slug.toLowerCase()) {
-        query = query.or(`shop_id.eq.${shopId},shop_id.eq.${slug},shop_id.ilike.${shopId},shop_id.ilike.${slug}`);
-      } else if (shopId) {
-        query = query.or(`shop_id.eq.${shopId},shop_id.ilike.${shopId}`);
-      }
+      const query = supabase.from('menu_items').select('*');
 
       const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
-        setTimeout(() => resolve({ data: null, error: new Error('Menu query timed out') }), 5000)
+        setTimeout(() => resolve({ data: null, error: new Error('Menu query timed out') }), 6000)
       );
       const { data, error } = await Promise.race([query, timeoutPromise]);
-      const remoteList: MenuItem[] = (!error && data && data.length > 0)
-        ? data.map(normalizeMenuItemDoc)
-        : [];
 
-      // Merge remote list with local additions for seamless instant sync
+      if (!error && Array.isArray(data)) {
+        const allRemote = data
+          .map(normalizeMenuItemDoc)
+          .filter((i) => !isFakeOrDefaultMenuItem(i));
+
+        const remoteList = shopId
+          ? allRemote.filter((i) => {
+              const sid = (i.shopId || '').toLowerCase().trim();
+              return sid === cleanTargetId || (cleanSlug && sid === cleanSlug);
+            })
+          : allRemote;
+
+        // Update local cache with clean database items
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('foodflow_menu_items', JSON.stringify(allRemote));
+          }
+        } catch {}
+
+        return remoteList;
+      }
+
+      // If network timed out, fall back only to real non-mock local items for this shop
       const filteredLocal = shopId
         ? localItems.filter((i) => {
             const sid = (i.shopId || '').toLowerCase().trim();
@@ -983,19 +1068,9 @@ class SupabaseSyncService {
           })
         : localItems;
 
-      const mergedMap = new Map<string, MenuItem>();
-      remoteList.forEach((i) => mergedMap.set(i.id, i));
-      filteredLocal.forEach((i) => mergedMap.set(i.id, i));
-
-      const result = Array.from(mergedMap.values());
-
-      // Only return real items from DB — never pad with fake defaults
-      if (result.length > 0) return result;
-
-      // Zero items in DB: only then show fallback so the customer page isn't blank
-      return shopId ? generateDefaultShopMenu(shopId, slug) : MOCK_MENU_ITEMS;
+      return filteredLocal;
     } catch (err) {
-      console.warn('[Supabase] Error fetching menu items, using fallback:', err);
+      console.warn('[Supabase] Error fetching menu items, using clean local fallback:', err);
       const filteredLocal = shopId
         ? localItems.filter((i) => {
             const sid = (i.shopId || '').toLowerCase().trim();
@@ -1003,21 +1078,7 @@ class SupabaseSyncService {
           })
         : localItems;
 
-      const fallbackMocks = shopId
-        ? MOCK_MENU_ITEMS.filter((i) => {
-            const sid = (i.shopId || '').toLowerCase().trim();
-            return sid === cleanTargetId || (cleanSlug && sid === cleanSlug);
-          })
-        : MOCK_MENU_ITEMS;
-
-      const mergedMap = new Map<string, MenuItem>();
-      fallbackMocks.forEach((i) => mergedMap.set(i.id, i));
-      filteredLocal.forEach((i) => mergedMap.set(i.id, i));
-
-      const fallbackResult = Array.from(mergedMap.values());
-      if (fallbackResult.length > 0) return fallbackResult;
-
-      return shopId ? generateDefaultShopMenu(shopId, slug) : MOCK_MENU_ITEMS;
+      return filteredLocal;
     } finally {
       this.endSync();
     }
@@ -1154,13 +1215,26 @@ class SupabaseSyncService {
   public async getOrder(orderId: string): Promise<Order | null> {
     this.startSync();
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .maybeSingle();
+      const [{ data, error }, liveShops] = await Promise.all([
+        supabase.from('orders').select('*').eq('id', orderId).maybeSingle(),
+        this.getShops(true),
+      ]);
 
       if (error || !data) return null;
+
+      // Verify that the order's shop still exists in the live shops table
+      const orderShopId = String(data.shop_id || data.shopId || '').trim().toLowerCase();
+      const shopExists = liveShops.some(
+        (s) =>
+          String(s.id || '').trim().toLowerCase() === orderShopId ||
+          (s.slug && String(s.slug).trim().toLowerCase() === orderShopId)
+      );
+
+      if (!shopExists) {
+        // Shop was deleted from the database — clean up orphaned order row in background and return null
+        supabase.from('orders').delete().eq('id', orderId).then(() => {});
+        return null;
+      }
 
       // Fetch items snapshot and payment UTR in parallel
       const [{ data: itemRows }, { data: paymentRow }] = await Promise.all([
@@ -1231,26 +1305,51 @@ class SupabaseSyncService {
   public async getOrdersByCustomer(customerId: string): Promise<Order[]> {
     this.startSync();
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*, order_items(*), payments(transaction_id, payment_status, paid_at)')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
+      const [primaryRes, liveShops] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('*, order_items(*), payments(transaction_id, payment_status, paid_at)')
+          .eq('customer_id', customerId)
+          .order('created_at', { ascending: false }),
+        this.getShops(true),
+      ]);
 
-      if (!error && data) {
-        return data.map(normalizeOrderDoc);
+      const validShopSet = new Set<string>();
+      for (const s of liveShops) {
+        if (s.id) validShopSet.add(String(s.id).trim().toLowerCase());
+        if (s.slug) validShopSet.add(String(s.slug).trim().toLowerCase());
       }
 
-      const { data: fallbackData } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
-
-      if (fallbackData) {
-        return fallbackData.map(normalizeOrderDoc);
+      let rawOrders: Order[] = [];
+      if (!primaryRes.error && primaryRes.data) {
+        rawOrders = primaryRes.data.map(normalizeOrderDoc);
+      } else {
+        const { data: fallbackData } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('customer_id', customerId)
+          .order('created_at', { ascending: false });
+        if (fallbackData) {
+          rawOrders = fallbackData.map(normalizeOrderDoc);
+        }
       }
-      return [];
+
+      // Filter out any order whose shop was deleted from the database, and clean up orphaned rows
+      const orphanedIds: string[] = [];
+      const activeShopOrders = rawOrders.filter((o) => {
+        const sid = String(o.shopId || '').trim().toLowerCase();
+        if (!sid || !validShopSet.has(sid)) {
+          if (o.id) orphanedIds.push(o.id);
+          return false;
+        }
+        return true;
+      });
+
+      if (orphanedIds.length > 0) {
+        supabase.from('orders').delete().in('id', orphanedIds).then(() => {});
+      }
+
+      return activeShopOrders;
     } catch (err) {
       console.warn('[Supabase] Error getting customer orders:', err);
       return [];
@@ -1685,6 +1784,7 @@ class SupabaseSyncService {
           { event: '*', schema: 'public', table: 'shops' },
           async (payload) => {
             console.log('[SupabaseRealtime] Shops change event:', payload.eventType);
+            this.invalidateShopsCache();
             const liveShops = await this.getShops(true);
             onChange(liveShops);
           }

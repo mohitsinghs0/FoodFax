@@ -1,28 +1,35 @@
 import { MenuItem, ShopCategory } from '../types';
 import { MOCK_MENU_ITEMS, MOCK_CATEGORIES } from '../data/mockData';
-import { firestoreSync, MOCK_SHOP_IDS } from './firestoreSyncService';
+import { firestoreSync, isFakeOrDefaultMenuItem } from './firestoreSyncService';
+import { isSupabaseConfigured } from '../supabase';
 
 const MENU_ITEMS_KEY = 'foodflow_menu_items';
 const CATEGORIES_KEY = 'foodflow_categories';
-
-
 
 export const menuService = {
   getStoredItems(): MenuItem[] {
     try {
       const stored = localStorage.getItem(MENU_ITEMS_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return isSupabaseConfigured
+            ? parsed.filter((i) => !isFakeOrDefaultMenuItem(i))
+            : parsed;
+        }
       }
     } catch {
       // fallback
     }
-    return [...MOCK_MENU_ITEMS];
+    return isSupabaseConfigured ? [] : [...MOCK_MENU_ITEMS];
   },
 
   saveStoredItems(items: MenuItem[]): void {
     try {
-      localStorage.setItem(MENU_ITEMS_KEY, JSON.stringify(items));
+      const clean = isSupabaseConfigured
+        ? items.filter((i) => !isFakeOrDefaultMenuItem(i))
+        : items;
+      localStorage.setItem(MENU_ITEMS_KEY, JSON.stringify(clean));
     } catch {
       // fallback
     }
@@ -49,13 +56,15 @@ export const menuService = {
   },
 
   async getShopMenu(shopId: string, shopSlug?: string): Promise<MenuItem[]> {
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 10));
 
-    // 1. Try fetching from Supabase first with timeout protection
+    // 1. Fetch from Supabase first
     try {
       const remoteItems = await firestoreSync.getMenuItemsByShop(shopId, shopSlug);
+      if (isSupabaseConfigured) {
+        return remoteItems || [];
+      }
       if (remoteItems && remoteItems.length > 0) {
-        // Optimistically cache items in local store so future loads are instantaneous
         try {
           const currentStored = this.getStoredItems();
           const mergedMap = new Map<string, MenuItem>();
@@ -77,12 +86,7 @@ export const menuService = {
       const sid = (item.shopId || '').toLowerCase().trim();
       return sid === lowerId || (lowerSlug && sid === lowerSlug);
     });
-    if (matched.length > 0) {
-      return matched;
-    }
-
-    // 3. Resilient fallback to stall menu generator
-    return firestoreSync.getMenuItems(shopId, shopSlug);
+    return matched;
   },
 
   async getItems(shopId: string): Promise<MenuItem[]> {

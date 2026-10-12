@@ -170,16 +170,32 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
     let unsubscribe: (() => void) | undefined;
 
     const loadOrder = async () => {
+      if (!orderId) {
+        setOrder(null);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const data = await orderService.getOrder(orderId);
+      if (!data) {
+        setOrder(null);
+        setLoading(false);
+        return;
+      }
+
+      // Verify that the shop for this order still exists in the database
+      const liveShop = await shopService.getShop(data.shopId);
+      if (!liveShop) {
+        setOrder(null);
+        setLoading(false);
+        return;
+      }
+
+      setShop(liveShop);
       setOrder(data);
       setLoading(false);
 
       if (data) {
-        // Fetch full shop data for map coordinates and details
-        shopService.getShop(data.shopId).then((s) => {
-          if (s) setShop(s);
-        });
         // Accurate queue calculation starting at 101
         const tokenNum = parseInt(String(data.tokenNumber || '').replace(/\D/g, ''), 10) || 101;
         

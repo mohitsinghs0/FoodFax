@@ -293,8 +293,12 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
   useEffect(() => {
     let isMounted = true;
     const unsubscribeShops = shopService.subscribeToShops((updatedShops) => {
-      if (isMounted && updatedShops && updatedShops.length > 0) {
+      if (isMounted && Array.isArray(updatedShops)) {
         setShops(updatedShops);
+        const liveIds = new Set(updatedShops.map((s) => String(s.id || '').trim().toLowerCase()));
+        setRecentOrders((prev) =>
+          prev.filter((o) => liveIds.has(String(o.shopId || '').trim().toLowerCase()))
+        );
       }
     });
 

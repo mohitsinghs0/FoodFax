@@ -51,30 +51,40 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
 
   useEffect(() => {
     let isMounted = true;
+    setLoading(true);
 
-    // Safety fallback: Never keep user stuck on loading spinner for more than 3 seconds
+    // Safety fallback: Never keep user stuck on loading spinner for more than 8 seconds
     const safetyTimer = setTimeout(() => {
       if (isMounted) {
         setLoading(false);
       }
-    }, 3000);
+    }, 8000);
 
     const loadShopData = async () => {
       // 1. Instant optimistic check: check local stored shops for instant rendering (0ms)
       try {
         const localShops = shopService.getStoredShops();
-        const cleanTargetId = String(shopId || '').toLowerCase().trim();
+        const cleanTargetId = decodeURIComponent(String(shopId || '')).toLowerCase().trim();
+        const cleanAlpha = cleanTargetId.replace(/[^a-z0-9]/g, '');
         const instantFound = localShops.find(
-          (s) => (s.id && s.id.toLowerCase() === cleanTargetId) || (s.slug && s.slug.toLowerCase() === cleanTargetId)
+          (s) =>
+            (s.id && s.id.toLowerCase() === cleanTargetId) ||
+            (s.slug && s.slug.toLowerCase() === cleanTargetId) ||
+            (s.name && s.name.toLowerCase() === cleanTargetId) ||
+            (cleanAlpha && s.id && s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha) ||
+            (cleanAlpha && s.slug && s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha) ||
+            (cleanAlpha && s.name && s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha)
         );
         if (instantFound && isMounted) {
           setShop(instantFound);
+          setLoading(false);
           const cachedMenu = menuService.getStoredItems().filter(
-            (i) => (i.shopId && i.shopId.toLowerCase() === instantFound.id.toLowerCase()) || (instantFound.slug && i.shopId.toLowerCase() === instantFound.slug.toLowerCase())
+            (i) =>
+              (i.shopId && i.shopId.toLowerCase() === instantFound.id.toLowerCase()) ||
+              (instantFound.slug && i.shopId.toLowerCase() === instantFound.slug.toLowerCase())
           );
           if (cachedMenu.length > 0) {
             setMenuItems(cachedMenu);
-            setLoading(false); // Render immediately if cached items exist
           }
           setCategories(menuService.getStoredCategories());
           setIsSaved(shopService.isShopSaved(instantFound.id));
@@ -83,9 +93,12 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
 
       // 2. Fetch fresh remote data with timeout
       try {
-        let foundShop = await shopService.getShop(shopId);
+        let foundShop = await shopService.getShopById(shopId);
         if (!foundShop) {
-          foundShop = await shopService.getShopById(shopId);
+          const nearby = await shopService.getNearbyShops();
+          if (nearby.length === 1) {
+            foundShop = nearby[0];
+          }
         }
         if (foundShop && isMounted) {
           setShop(foundShop);

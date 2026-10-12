@@ -1,25 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
+import { validatePasswordFormat, validateEmailOrPhoneInput } from '../services/authService';
 import { 
   Store, 
-  User, 
   Lock, 
   Mail, 
-  Phone, 
-  ArrowRight, 
-  ShieldCheck, 
   AlertCircle,
   Eye,
   EyeOff,
   KeyRound,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Check
 } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
   const { route, navigate } = useRouter();
-  const { login, resetPassword, signInWithGoogle } = useAuth();
+  const { login, resetPassword } = useAuth();
   const rawRedirect =
     route.params?.redirect ||
     (typeof window !== 'undefined'
@@ -43,20 +41,32 @@ export const LoginView: React.FC = () => {
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
 
+  const newPwdChecks = useMemo(() => validatePasswordFormat(newPassword), [newPassword]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emailOrPhone.trim()) {
-      setError('Please enter your email or mobile number.');
+    const inputCheck = validateEmailOrPhoneInput(emailOrPhone);
+    if (!inputCheck.isValid) {
+      setError(inputCheck.message || 'Please enter a valid 10-digit mobile number or email address.');
       return;
     }
-    if (!password.trim()) {
+    if (!password) {
       setError('Please enter your password.');
       return;
     }
+    if (/\s/.test(password)) {
+      setError('Password cannot contain spaces.');
+      return;
+    }
+    if (password.length < 4) {
+      setError('Please enter a valid password (at least 6 characters).');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const loggedUser = await login(emailOrPhone.trim(), password.trim());
+      const loggedUser = await login(emailOrPhone.trim(), password);
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('foodfax_post_login_redirect');
       }
@@ -75,16 +85,13 @@ export const LoginView: React.FC = () => {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotInput.trim()) {
-      setForgotError('Please enter your mobile number or email.');
+    const inputCheck = validateEmailOrPhoneInput(forgotInput);
+    if (!inputCheck.isValid) {
+      setForgotError(inputCheck.message || 'Please enter a valid 10-digit mobile number or email.');
       return;
     }
-    if (!newPassword.trim()) {
-      setForgotError('Please enter a new password.');
-      return;
-    }
-    if (newPassword.length < 4) {
-      setForgotError('Password must contain at least 4 characters.');
+    if (!newPwdChecks.isValid) {
+      setForgotError(newPwdChecks.message || 'Password must be at least 6 characters with letters and numbers.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -99,11 +106,11 @@ export const LoginView: React.FC = () => {
     try {
       const res = await resetPassword({
         emailOrPhone: forgotInput.trim(),
-        newPassword: newPassword.trim(),
+        newPassword: newPassword,
       });
       setForgotSuccess(res.message);
       setEmailOrPhone(forgotInput.trim());
-      setPassword(newPassword.trim());
+      setPassword(newPassword);
     } catch (err: any) {
       console.warn('[LoginView] Password reset error:', err?.message);
       setForgotError(err?.message || 'Password reset failed. Please try again.');
@@ -137,7 +144,7 @@ export const LoginView: React.FC = () => {
       <form onSubmit={handleLogin} className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            Email or Mobile Number
+            Email or 10-Digit Mobile Number
           </label>
           <div className="relative">
             <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -149,6 +156,7 @@ export const LoginView: React.FC = () => {
                 if (error) setError(null);
               }}
               placeholder="e.g. name@example.com or 9820011223"
+              autoComplete="username"
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
               required
             />
@@ -185,6 +193,7 @@ export const LoginView: React.FC = () => {
                 if (error) setError(null);
               }}
               placeholder="Enter your password"
+              autoComplete="current-password"
               className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
               required
             />
@@ -204,7 +213,7 @@ export const LoginView: React.FC = () => {
           disabled={loading}
           className="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:bg-slate-300 text-white font-black text-xs shadow-md shadow-orange-500/20 transition-all cursor-pointer"
         >
-          {loading ? 'Signing in...' : 'Sign In'}
+          {loading ? 'Verifying & Signing in...' : 'Sign In'}
         </button>
 
         <div className="text-center pt-2">
@@ -274,7 +283,7 @@ export const LoginView: React.FC = () => {
               <form onSubmit={handleResetPassword} className="space-y-3">
                 <div>
                   <label className="block text-2xs font-bold text-slate-700 mb-1">
-                    Mobile Number or Email *
+                    Registered Mobile Number or Email *
                   </label>
                   <input
                     type="text"
@@ -301,7 +310,7 @@ export const LoginView: React.FC = () => {
                         setNewPassword(e.target.value);
                         if (forgotError) setForgotError(null);
                       }}
-                      placeholder="At least 4 characters"
+                      placeholder="Min 6 chars with letters & numbers"
                       className="w-full pl-3 pr-9 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
                       required
                     />
@@ -314,6 +323,24 @@ export const LoginView: React.FC = () => {
                       {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
+
+                  {/* Live Password Format Checklist */}
+                  {newPassword.length > 0 && (
+                    <div className="mt-2 grid grid-cols-2 gap-1 bg-slate-50 p-2 rounded-xl border border-slate-200/70">
+                      <span className={`text-[10px] font-bold flex items-center gap-1 ${newPwdChecks.checks.minLength ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <Check className="w-3 h-3" /> 6+ characters
+                      </span>
+                      <span className={`text-[10px] font-bold flex items-center gap-1 ${newPwdChecks.checks.hasLetter ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <Check className="w-3 h-3" /> Letters (A-Z)
+                      </span>
+                      <span className={`text-[10px] font-bold flex items-center gap-1 ${newPwdChecks.checks.hasNumber ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <Check className="w-3 h-3" /> Numbers (0-9)
+                      </span>
+                      <span className={`text-[10px] font-bold flex items-center gap-1 ${newPwdChecks.checks.noSpaces ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <Check className="w-3 h-3" /> No spaces
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div>

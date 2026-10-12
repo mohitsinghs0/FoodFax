@@ -1,17 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
+import { validatePasswordFormat } from '../services/authService';
 import { 
-  Store, 
   User, 
-  Lock, 
-  Mail, 
-  Phone, 
-  ArrowRight, 
   AlertCircle,
-  CheckCircle2,
   Eye,
-  EyeOff
+  EyeOff,
+  Check
 } from 'lucide-react';
 
 export const RegisterView: React.FC = () => {
@@ -28,16 +24,38 @@ export const RegisterView: React.FC = () => {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const pwdValidation = useMemo(() => validatePasswordFormat(password), [password]);
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !password.trim()) {
-      setError('Please fill in all required fields.');
+    if (!fullName.trim() || fullName.trim().length < 2) {
+      setError('Please enter your full name.');
       return;
     }
+    const cleanDigits = phone.replace(/\D/g, '');
+    const last10 = cleanDigits.slice(-10);
+    if (cleanDigits.length < 10 || !/^[6-9]\d{9}$/.test(last10)) {
+      setError('Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (!pwdValidation.isValid) {
+      setError(pwdValidation.message || 'Password must be at least 6 characters with letters and numbers.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -46,7 +64,7 @@ export const RegisterView: React.FC = () => {
         fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
-        password: password.trim(),
+        password: password,
       });
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('foodfax_post_login_redirect');
@@ -106,7 +124,7 @@ export const RegisterView: React.FC = () => {
 
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            Mobile Number *
+            10-Digit Mobile Number *
           </label>
           <input
             type="tel"
@@ -115,7 +133,7 @@ export const RegisterView: React.FC = () => {
               setPhone(e.target.value);
               if (error) setError(null);
             }}
-            placeholder="+91 98200 11223"
+            placeholder="e.g. 9820011223"
             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
             required
           />
@@ -149,7 +167,7 @@ export const RegisterView: React.FC = () => {
                 setPassword(e.target.value);
                 if (error) setError(null);
               }}
-              placeholder="••••••••"
+              placeholder="Min 6 chars with letters & numbers"
               className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
               required
             />
@@ -162,6 +180,39 @@ export const RegisterView: React.FC = () => {
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+
+          {/* Live Password Format Checklist */}
+          <div className="mt-2 grid grid-cols-2 gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
+            <span className={`text-[10px] font-bold flex items-center gap-1 ${pwdValidation.checks.minLength ? 'text-emerald-600' : 'text-slate-400'}`}>
+              <Check className="w-3 h-3" /> 6+ characters
+            </span>
+            <span className={`text-[10px] font-bold flex items-center gap-1 ${pwdValidation.checks.hasLetter ? 'text-emerald-600' : 'text-slate-400'}`}>
+              <Check className="w-3 h-3" /> Letters (A-Z)
+            </span>
+            <span className={`text-[10px] font-bold flex items-center gap-1 ${pwdValidation.checks.hasNumber ? 'text-emerald-600' : 'text-slate-400'}`}>
+              <Check className="w-3 h-3" /> Numbers (0-9)
+            </span>
+            <span className={`text-[10px] font-bold flex items-center gap-1 ${pwdValidation.checks.noSpaces ? 'text-emerald-600' : 'text-slate-400'}`}>
+              <Check className="w-3 h-3" /> No spaces
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            Confirm Password *
+          </label>
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              if (error) setError(null);
+            }}
+            placeholder="Re-enter your password"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+            required
+          />
         </div>
 
         <button
