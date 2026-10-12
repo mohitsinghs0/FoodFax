@@ -176,16 +176,18 @@ export const CheckoutView: React.FC = () => {
 
   const activeQrCodeUrl = upiData?.qrCode || '';
   const activeUpiLink = upiData?.upiLink || '';
+  const payableAmount = upiData?.amount ? Number(upiData.amount) : grandTotal;
 
   /**
-   * Builds app-specific deep links for Google Pay, PhonePe, Paytm, or generic UPI
-   * using the dynamic UPIQRPay intent link so the BharatPe tracking reference is preserved.
+   * Builds app-specific deep links for Google Pay, PhonePe, Paytm, or generic UPI.
+   * Extracts the verified BharatPe Merchant VPA (`pa`) from UPIQRPay's dynamic link
+   * and omits unsigned locked `&am=`/`+`-encoded `&tn=` parameters so Google Pay / NPCI
+   * never declines the browser intent while UPIQRPay still auto-verifies the payment on BharatPe.
    */
   const getUpiAppHref = (app: 'gpay' | 'phonepe' | 'paytm' | 'bhim'): string => {
     const baseLink = activeUpiLink;
     if (!baseLink) return upiData?.payUrl || '#';
-    const queryIdx = baseLink.indexOf('?');
-    const query = queryIdx !== -1 ? baseLink.slice(queryIdx + 1) : '';
+
     const isMobile =
       typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -193,11 +195,20 @@ export const CheckoutView: React.FC = () => {
       return upiData.payUrl;
     }
 
-    if (query) {
-      if (app === 'gpay') return `tez://upi/pay?${query}`;
-      if (app === 'phonepe') return `phonepe://pay?${query}`;
-      if (app === 'paytm') return `paytmmp://pay?${query}`;
+    const queryIdx = baseLink.indexOf('?');
+    const rawQuery = queryIdx !== -1 ? baseLink.slice(queryIdx + 1) : '';
+    const params = new URLSearchParams(rawQuery);
+    const merchantPa = params.get('pa') || '';
+    const merchantPn = (params.get('pn') || shopName || 'FoodFax India').replace(/\+/g, ' ');
+
+    if (merchantPa) {
+      const cleanMerchantQuery = `pa=${encodeURIComponent(merchantPa)}&pn=${encodeURIComponent(merchantPn)}&cu=INR`;
+      if (app === 'gpay') return `tez://upi/pay?${cleanMerchantQuery}`;
+      if (app === 'phonepe') return `phonepe://pay?${cleanMerchantQuery}`;
+      if (app === 'paytm') return `paytmmp://pay?${cleanMerchantQuery}`;
+      return `upi://pay?${cleanMerchantQuery}`;
     }
+
     return baseLink;
   };
 
@@ -774,8 +785,8 @@ export const CheckoutView: React.FC = () => {
                 {/* Stall & Amount Header Card */}
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                   <div>
-                    <span className="block text-[10px] uppercase font-bold text-slate-400">Total To Pay</span>
-                    <span className="text-xl font-black text-slate-900">₹{grandTotal}</span>
+                    <span className="block text-[10px] uppercase font-bold text-slate-400">Exact Amount To Pay</span>
+                    <span className="text-xl font-black text-slate-900">₹{payableAmount}</span>
                     <span className="block text-[10px] font-semibold text-emerald-700 mt-0.5">
                       ✓ BharatPe / UPIQRPay Auto-Verify Active
                     </span>
@@ -795,7 +806,7 @@ export const CheckoutView: React.FC = () => {
                 {/* Direct 1-Tap UPI Apps Grid (GPay, PhonePe, Paytm, BHIM) */}
                 <div className="space-y-2">
                   <span className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
-                    Pay Directly with UPI App
+                    Pay ₹{payableAmount} Directly with UPI App
                   </span>
                   <div className="grid grid-cols-2 gap-2">
                     <a
@@ -809,7 +820,7 @@ export const CheckoutView: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <span className="block text-xs font-black text-slate-900 truncate">Google Pay</span>
-                        <span className="block text-[9px] text-slate-500">Instant Auto-Verify</span>
+                        <span className="block text-[9px] text-slate-500">Pay ₹{payableAmount} • Auto-Verify</span>
                       </div>
                     </a>
 
@@ -824,7 +835,7 @@ export const CheckoutView: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <span className="block text-xs font-black text-slate-900 truncate">PhonePe</span>
-                        <span className="block text-[9px] text-slate-500">Instant Auto-Verify</span>
+                        <span className="block text-[9px] text-slate-500">Pay ₹{payableAmount} • Auto-Verify</span>
                       </div>
                     </a>
 
@@ -839,7 +850,7 @@ export const CheckoutView: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <span className="block text-xs font-black text-slate-900 truncate">Paytm UPI</span>
-                        <span className="block text-[9px] text-slate-500">Instant Auto-Verify</span>
+                        <span className="block text-[9px] text-slate-500">Pay ₹{payableAmount} • Auto-Verify</span>
                       </div>
                     </a>
 
@@ -854,7 +865,7 @@ export const CheckoutView: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <span className="block text-xs font-black text-slate-900 truncate">Any UPI App</span>
-                        <span className="block text-[9px] text-slate-500">BHIM / CRED / Navi</span>
+                        <span className="block text-[9px] text-slate-500">Pay ₹{payableAmount} • Auto-Verify</span>
                       </div>
                     </a>
                   </div>
@@ -871,7 +882,7 @@ export const CheckoutView: React.FC = () => {
                     <div className="mt-2 text-center">
                       <p className="text-[11px] font-bold text-slate-700">Or Scan QR with Google Pay / PhonePe / Paytm</p>
                       <p className="text-[10px] text-slate-400">
-                        Amount ₹{grandTotal} is pre-filled • Auto-detects payment in 2–3 seconds
+                        Amount ₹{payableAmount} is pre-filled • Auto-detects payment in 2–3 seconds
                       </p>
                     </div>
                   </div>

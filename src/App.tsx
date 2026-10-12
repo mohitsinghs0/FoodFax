@@ -267,6 +267,9 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -275,6 +278,8 @@ export default function App() {
           <RouterProvider>
             <CartProvider>
               <AppContent />
+              <Analytics />
+              <SpeedInsights />
             </CartProvider>
           </RouterProvider>
         </AuthProvider>
