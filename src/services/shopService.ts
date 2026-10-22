@@ -495,6 +495,14 @@ export const shopService = {
   },
 
   async getCategories(): Promise<ShopCategory[]> {
+    if (isSupabaseConfigured) {
+      try {
+        const remoteCats = await firestoreSync.getCategories();
+        if (remoteCats && remoteCats.length > 0) return remoteCats;
+      } catch (err) {
+        console.warn('[shopService] Error fetching categories from Supabase:', err);
+      }
+    }
     return MOCK_CATEGORIES;
   },
 

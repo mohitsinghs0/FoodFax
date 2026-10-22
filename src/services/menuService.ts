@@ -21,7 +21,7 @@ export const menuService = {
     } catch {
       // fallback
     }
-    return isSupabaseConfigured ? [] : [...MOCK_MENU_ITEMS];
+    return [];
   },
 
   saveStoredItems(items: MenuItem[]): void {
@@ -58,34 +58,58 @@ export const menuService = {
   async getShopMenu(shopId: string, shopSlug?: string): Promise<MenuItem[]> {
     await new Promise((r) => setTimeout(r, 10));
 
-    // 1. Fetch from Supabase first
+    // 1. Fetch from Supabase / live sync
     try {
       const remoteItems = await firestoreSync.getMenuItemsByShop(shopId, shopSlug);
-      if (isSupabaseConfigured) {
-        return remoteItems || [];
-      }
       if (remoteItems && remoteItems.length > 0) {
-        try {
-          const currentStored = this.getStoredItems();
-          const mergedMap = new Map<string, MenuItem>();
-          currentStored.forEach((i) => mergedMap.set(i.id, i));
-          remoteItems.forEach((i) => mergedMap.set(i.id, i));
-          this.saveStoredItems(Array.from(mergedMap.values()));
-        } catch {}
         return remoteItems;
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      console.warn('[menuService] Error fetching remote items:', err);
     }
 
-    // 2. Check local store
+    // 2. Check local store for any items added for this shop
     const items = this.getStoredItems();
     const lowerId = (shopId || '').toLowerCase().trim();
     const lowerSlug = (shopSlug || '').toLowerCase().trim();
+    const idAlpha = lowerId.replace(/[^a-z0-9]/g, '');
+    const slugAlpha = lowerSlug.replace(/[^a-z0-9]/g, '');
+
+    let localShops: any[] = [];
+    try {
+      const raw = localStorage.getItem('foodflow_shops') || localStorage.getItem('foodflow_shops_list');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) localShops = parsed;
+      }
+    } catch {}
+
+    const foundShop = localShops.find(
+      (s: any) =>
+        (s.id && s.id.toLowerCase() === lowerId) ||
+        (s.slug && s.slug.toLowerCase() === lowerId) ||
+        (lowerSlug && s.id && s.id.toLowerCase() === lowerSlug) ||
+        (lowerSlug && s.slug && s.slug.toLowerCase() === lowerSlug)
+    );
+    const resolvedId = foundShop?.id ? foundShop.id.toLowerCase().trim() : lowerId;
+    const resolvedSlug = foundShop?.slug ? foundShop.slug.toLowerCase().trim() : lowerSlug;
+    const resolvedIdAlpha = resolvedId.replace(/[^a-z0-9]/g, '');
+    const resolvedSlugAlpha = resolvedSlug.replace(/[^a-z0-9]/g, '');
+
     const matched = items.filter((item) => {
       const sid = (item.shopId || '').toLowerCase().trim();
-      return sid === lowerId || (lowerSlug && sid === lowerSlug);
+      const sidAlpha = sid.replace(/[^a-z0-9]/g, '');
+      if (sid === lowerId || (lowerSlug && sid === lowerSlug)) return true;
+      if (resolvedId && sid === resolvedId) return true;
+      if (resolvedSlug && sid === resolvedSlug) return true;
+      if (idAlpha && sidAlpha === idAlpha) return true;
+      if (slugAlpha && sidAlpha === slugAlpha) return true;
+      if (resolvedIdAlpha && sidAlpha === resolvedIdAlpha) return true;
+      if (resolvedSlugAlpha && sidAlpha === resolvedSlugAlpha) return true;
+      return false;
     });
+
+    // If local store has items that were added by the owner, return them
     return matched;
   },
 
@@ -152,6 +176,12 @@ export const menuService = {
 
   async getCategories(shopId?: string): Promise<ShopCategory[]> {
     await new Promise((r) => setTimeout(r, 30));
+    if (isSupabaseConfigured) {
+      try {
+        const remote = await firestoreSync.getCategories();
+        if (remote && remote.length > 0) return remote;
+      } catch {}
+    }
     return this.getStoredCategories();
   },
 

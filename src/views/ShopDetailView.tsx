@@ -61,12 +61,13 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
     }, 8000);
 
     const loadShopData = async () => {
+      let instantFound: Shop | null = null;
       // 1. Instant optimistic check: check local stored shops for instant rendering (0ms)
       try {
         const localShops = shopService.getStoredShops();
         const cleanTargetId = decodeURIComponent(String(shopId || '')).toLowerCase().trim();
         const cleanAlpha = cleanTargetId.replace(/[^a-z0-9]/g, '');
-        const instantFound = localShops.find(
+        instantFound = localShops.find(
           (s) =>
             (s.id && s.id.toLowerCase() === cleanTargetId) ||
             (s.slug && s.slug.toLowerCase() === cleanTargetId) ||
@@ -74,15 +75,22 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
             (cleanAlpha && s.id && s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha) ||
             (cleanAlpha && s.slug && s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha) ||
             (cleanAlpha && s.name && s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha)
-        );
+        ) || null;
         if (instantFound && isMounted) {
           setShop(instantFound);
           setLoading(false);
-          const cachedMenu = menuService.getStoredItems().filter(
-            (i) =>
-              (i.shopId && i.shopId.toLowerCase() === instantFound.id.toLowerCase()) ||
-              (instantFound.slug && i.shopId.toLowerCase() === instantFound.slug.toLowerCase())
-          );
+          const shopIdLower = instantFound.id.toLowerCase();
+          const shopSlugLower = (instantFound.slug || '').toLowerCase();
+          const sAlpha = shopIdLower.replace(/[^a-z0-9]/g, '');
+          const slugAlpha = shopSlugLower.replace(/[^a-z0-9]/g, '');
+          const cachedMenu = menuService.getStoredItems().filter((i) => {
+            const sid = (i.shopId || '').toLowerCase().trim();
+            const sidAlpha = sid.replace(/[^a-z0-9]/g, '');
+            if (sid === shopIdLower || (shopSlugLower && sid === shopSlugLower)) return true;
+            if (sAlpha && sidAlpha === sAlpha) return true;
+            if (slugAlpha && sidAlpha === slugAlpha) return true;
+            return false;
+          });
           if (cachedMenu.length > 0) {
             setMenuItems(cachedMenu);
           }
@@ -94,6 +102,9 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
       // 2. Fetch fresh remote data with timeout
       try {
         let foundShop = await shopService.getShopById(shopId);
+        if (!foundShop && instantFound) {
+          foundShop = instantFound;
+        }
         if (!foundShop) {
           const nearby = await shopService.getNearbyShops();
           if (nearby.length === 1) {
@@ -108,7 +119,7 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
               shopService.getCategories(),
             ]);
             if (isMounted) {
-              setMenuItems(items && items.length > 0 ? items : []);
+              setMenuItems(items || []);
               setCategories(cats || []);
               setIsSaved(shopService.isShopSaved(foundShop.id));
             }
@@ -170,8 +181,24 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
   }, [menuItems, selectedCategory, searchQuery, onlyVeg]);
 
   // Extract relevant categories for this shop
-  const shopCategoryIds = new Set(menuItems.map((i) => i.categoryId));
-  const availableCategories = categories.filter((c) => shopCategoryIds.has(c.id));
+  const availableCategories = useMemo(() => {
+    const shopCategoryIds = new Set(menuItems.map((i) => i.categoryId).filter(Boolean));
+    const matched = categories.filter((c) => shopCategoryIds.has(c.id));
+    shopCategoryIds.forEach((catId) => {
+      if (!matched.some((c) => c.id === catId)) {
+        const formattedName = catId
+          .replace(/^cat[_-]/i, '')
+          .replace(/[_-]/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+        matched.push({
+          id: catId,
+          name: formattedName || 'Special',
+          iconName: 'Utensils',
+        });
+      }
+    });
+    return matched;
+  }, [categories, menuItems]);
 
   // Distance from active customer location
   const distanceKm = useMemo(() => {

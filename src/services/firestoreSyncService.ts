@@ -103,22 +103,8 @@ export function isShopSuspendedOrKycPending(shop: any): boolean {
 
 export function isFakeOrDefaultMenuItem(item: any): boolean {
   if (!item || !item.id) return true;
+  // Strictly filter only items explicitly marked as demo
   if (item.isDemo === true || item.is_demo === true) return true;
-  const id = String(item.id).trim();
-  const sid = String(item.shopId || item.shop_id || '').trim();
-  if (MOCK_SHOP_IDS.has(sid)) return true;
-  if (/-item-[1-6]$/.test(id)) return true;
-  if (/^(svp|cc|msc|tth|ss|fjp|pkp|pvp|dch|bt)-\d+$/i.test(id)) return true;
-
-  const name = String(item.name || '').toLowerCase().trim();
-  const desc = String(item.description || '').toLowerCase().trim();
-  if (
-    desc === 'chef recommendation made fresh with authentic street flavors.' ||
-    (name === 'special cutting chai / beverage' && desc === 'freshly brewed hot cutting tea.') ||
-    name.endsWith('special thali / combo')
-  ) {
-    return true;
-  }
   return false;
 }
 
@@ -307,7 +293,9 @@ export function normalizeMenuItemDoc(data: any): MenuItem {
     preparationTimeMin: Number(data.preparation_time_min ?? data.preparationTimeMin ?? 5),
     preparationMinutes: data.preparation_minutes || data.preparationMinutes || '5-10',
     customizationOptions: data.customization_options || data.customizationOptions || [],
-  };
+    // Preserve isDemo so callers can filter out seeded-demo items
+    isDemo: Boolean(data.is_demo ?? data.isDemo),
+  } as MenuItem & { isDemo: boolean };
 }
 
 /**
@@ -951,18 +939,32 @@ class SupabaseSyncService {
   public async createMenuItem(item: MenuItem): Promise<void> {
     this.startSync();
     try {
+      let effectiveShopId = item.shopId;
+      // Resolve slug to shop.id if needed so foreign key constraint never fails
+      try {
+        const { data: matchedShop } = await supabase
+          .from('shops')
+          .select('id, slug')
+          .or(`id.eq.${item.shopId},slug.eq.${item.shopId}`)
+          .maybeSingle();
+        if (matchedShop?.id) {
+          effectiveShopId = matchedShop.id;
+        }
+      } catch {}
+
       const basePayload: any = {
         id: item.id,
-        shop_id: item.shopId,
-        category_id: item.categoryId,
+        shop_id: effectiveShopId,
+        category_id: item.categoryId || null,
         name: item.name,
-        description: item.description,
+        description: item.description || '',
         price: item.price,
         image: item.image,
         is_veg: item.isVeg,
         is_available: item.isAvailable,
         is_bestseller: item.isBestseller ?? false,
         preparation_time_min: item.preparationTimeMin ?? 5,
+        is_active: true,
         updated_at: new Date().toISOString(),
       };
 
@@ -973,8 +975,18 @@ class SupabaseSyncService {
       });
 
       if (error) {
-        // Fallback if optional columns do not exist in the Supabase menu_items table
-        await supabase.from('menu_items').upsert(basePayload);
+        console.warn('[Supabase] Initial menu item upsert note:', error.message);
+        // Fallback 1: Try base payload
+        const { error: err1 } = await supabase.from('menu_items').upsert(basePayload);
+        if (err1) {
+          // Fallback 2: Category ID may violate foreign key constraint — retry with category_id = null
+          console.warn('[Supabase] Retrying menu item upsert with category_id = null:', err1.message);
+          const safePayload = { ...basePayload, category_id: null };
+          const { error: err2 } = await supabase.from('menu_items').upsert(safePayload);
+          if (err2) {
+            console.error('[Supabase] Fatal error creating menu item in database:', err2.message);
+          }
+        }
       }
     } catch (err) {
       console.warn('[Supabase] Error creating menu item:', err);
@@ -1003,30 +1015,73 @@ class SupabaseSyncService {
 
     const cleanTargetId = (shopId || '').toLowerCase().trim();
     const cleanSlug = (slug || '').toLowerCase().trim();
+    const targetAlpha = cleanTargetId.replace(/[^a-z0-9]/g, '');
+    const slugAlpha = cleanSlug.replace(/[^a-z0-9]/g, '');
+
+    // Resolve bidirectional shop ID and Slug from cached or stored shops
+    let resolvedShopId = cleanTargetId;
+    let resolvedSlug = cleanSlug;
+    try {
+      const knownShops: Shop[] = this.cachedShops || [];
+      let foundShop = knownShops.find(
+        (s) =>
+          (s.id && s.id.toLowerCase() === cleanTargetId) ||
+          (s.slug && s.slug.toLowerCase() === cleanTargetId) ||
+          (cleanSlug && s.id && s.id.toLowerCase() === cleanSlug) ||
+          (cleanSlug && s.slug && s.slug.toLowerCase() === cleanSlug) ||
+          (targetAlpha && s.id && s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === targetAlpha) ||
+          (targetAlpha && s.slug && s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === targetAlpha)
+      );
+
+      if (!foundShop && typeof localStorage !== 'undefined') {
+        const storedRaw = localStorage.getItem('foodflow_shops') || localStorage.getItem('foodflow_shops_list');
+        if (storedRaw) {
+          const parsed = JSON.parse(storedRaw);
+          if (Array.isArray(parsed)) {
+            foundShop = parsed.find(
+              (s: any) =>
+                (s.id && s.id.toLowerCase() === cleanTargetId) ||
+                (s.slug && s.slug.toLowerCase() === cleanTargetId) ||
+                (cleanSlug && s.id && s.id.toLowerCase() === cleanSlug) ||
+                (cleanSlug && s.slug && s.slug.toLowerCase() === cleanSlug) ||
+                (targetAlpha && s.id && s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === targetAlpha) ||
+                (targetAlpha && s.slug && s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === targetAlpha)
+            );
+          }
+        }
+      }
+
+      if (foundShop) {
+        if (foundShop.id) resolvedShopId = foundShop.id.toLowerCase().trim();
+        if (foundShop.slug) resolvedSlug = (foundShop.slug || '').toLowerCase().trim();
+      }
+    } catch {}
+
+    const resolvedIdAlpha = resolvedShopId.replace(/[^a-z0-9]/g, '');
+    const resolvedSlugAlpha = resolvedSlug.replace(/[^a-z0-9]/g, '');
+
+    const isShopItemMatch = (itemShopId?: string): boolean => {
+      if (!shopId) return true;
+      const sid = (itemShopId || '').toLowerCase().trim();
+      if (!sid) return false;
+      const sidAlpha = sid.replace(/[^a-z0-9]/g, '');
+
+      if (sid === cleanTargetId || (cleanSlug && sid === cleanSlug)) return true;
+      if (resolvedShopId && sid === resolvedShopId) return true;
+      if (resolvedSlug && sid === resolvedSlug) return true;
+      if (targetAlpha && sidAlpha === targetAlpha) return true;
+      if (slugAlpha && sidAlpha === slugAlpha) return true;
+      if (resolvedIdAlpha && sidAlpha === resolvedIdAlpha) return true;
+      if (resolvedSlugAlpha && sidAlpha === resolvedSlugAlpha) return true;
+      return false;
+    };
 
     if (!isSupabaseConfigured) {
       const filteredLocal = shopId
-        ? localItems.filter((i) => {
-            const sid = (i.shopId || '').toLowerCase().trim();
-            return sid === cleanTargetId || (cleanSlug && sid === cleanSlug);
-          })
+        ? localItems.filter((i) => isShopItemMatch(i.shopId))
         : localItems;
 
-      const fallbackMocks = shopId
-        ? MOCK_MENU_ITEMS.filter((i) => {
-            const sid = (i.shopId || '').toLowerCase().trim();
-            return sid === cleanTargetId || (cleanSlug && sid === cleanSlug);
-          })
-        : MOCK_MENU_ITEMS;
-
-      const mergedMap = new Map<string, MenuItem>();
-      fallbackMocks.forEach((i) => mergedMap.set(i.id, i));
-      filteredLocal.forEach((i) => mergedMap.set(i.id, i));
-
-      const localResult = Array.from(mergedMap.values());
-      if (localResult.length > 0) return localResult;
-
-      return shopId ? generateDefaultShopMenu(shopId, slug) : MOCK_MENU_ITEMS;
+      return filteredLocal;
     }
 
     this.startSync();
@@ -1039,43 +1094,48 @@ class SupabaseSyncService {
       const { data, error } = await Promise.race([query, timeoutPromise]);
 
       if (!error && Array.isArray(data)) {
+        // Only strip items explicitly marked as demo in the raw DB row.
+        // Do NOT generate or inject any fake/default items — show only what the shop owner added.
         const allRemote = data
-          .map(normalizeMenuItemDoc)
-          .filter((i) => !isFakeOrDefaultMenuItem(i));
+          .filter((row: any) => !row.is_demo)
+          .map(normalizeMenuItemDoc);
+
+        // Merge DB items with any locally stored items that haven't synced yet
+        const unSyncedLocal = localItems.filter((loc) => {
+          return !allRemote.some((rem) => rem.id === loc.id);
+        });
+        if (unSyncedLocal.length > 0) {
+          // Attempt to push any un-synced items to DB in the background
+          unSyncedLocal.forEach((it) => this.createMenuItem(it).catch(() => {}));
+        }
+
+        const combinedItems = [...allRemote, ...unSyncedLocal];
 
         const remoteList = shopId
-          ? allRemote.filter((i) => {
-              const sid = (i.shopId || '').toLowerCase().trim();
-              return sid === cleanTargetId || (cleanSlug && sid === cleanSlug);
-            })
-          : allRemote;
+          ? combinedItems.filter((i) => isShopItemMatch(i.shopId))
+          : combinedItems;
 
-        // Update local cache with clean database items
+        // Update local cache with combined items (never wipe out un-synced items)
         try {
           if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('foodflow_menu_items', JSON.stringify(allRemote));
+            localStorage.setItem('foodflow_menu_items', JSON.stringify(combinedItems));
           }
         } catch {}
 
+        // Return exactly what is in DB / owner added — empty array if shop owner has not added any items yet
         return remoteList;
       }
 
-      // If network timed out, fall back only to real non-mock local items for this shop
+      // Network timed out — fall back to local cache only (no fake items injected)
       const filteredLocal = shopId
-        ? localItems.filter((i) => {
-            const sid = (i.shopId || '').toLowerCase().trim();
-            return sid === cleanTargetId || (cleanSlug && sid === cleanSlug);
-          })
+        ? localItems.filter((i) => isShopItemMatch(i.shopId))
         : localItems;
 
       return filteredLocal;
     } catch (err) {
       console.warn('[Supabase] Error fetching menu items, using clean local fallback:', err);
       const filteredLocal = shopId
-        ? localItems.filter((i) => {
-            const sid = (i.shopId || '').toLowerCase().trim();
-            return sid === cleanTargetId || (cleanSlug && sid === cleanSlug);
-          })
+        ? localItems.filter((i) => isShopItemMatch(i.shopId))
         : localItems;
 
       return filteredLocal;

@@ -7,27 +7,41 @@ const env: any = (typeof import.meta !== 'undefined' && import.meta.env)
   : (typeof process !== 'undefined' && process.env ? process.env : {});
 
 const supabaseUrl = (env.VITE_SUPABASE_URL || env.SUPABASE_URL || '').trim();
-const supabaseAnonKey = (env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+const supabaseAnonKey = (
+  env.VITE_SUPABASE_ANON_KEY ||
+  env.SUPABASE_ANON_KEY ||
+  env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  ''
+).trim();
+// NOTE: Service Role Key must NEVER be used in client-side code.
+// It is only read here for optional server-side admin client initialization.
 const supabaseServiceRoleKey = (env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY || '').trim();
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
   supabaseUrl.startsWith('http') &&
   !supabaseUrl.includes('your-project') &&
+  !supabaseUrl.includes('mock-foodfax') &&
   supabaseAnonKey &&
-  supabaseAnonKey !== 'your-anon-or-publishable-key'
+  supabaseAnonKey !== 'your-anon-or-publishable-key' &&
+  supabaseAnonKey !== 'mock-anon-key-placeholder'
 );
 
 if (!isSupabaseConfigured) {
   console.info(
     '[Supabase] ℹ️ Running in demo / mock data mode.\n' +
-    'To connect live cloud Supabase database, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.'
+    'To connect to the local Supabase stack, set VITE_SUPABASE_URL=http://127.0.0.1:8000 and VITE_SUPABASE_ANON_KEY in .env'
   );
+} else {
+  console.info('[Supabase] ✅ Configured → ', supabaseUrl);
 }
 
-const activeUrl = isSupabaseConfigured ? supabaseUrl : 'https://mock-foodfax.supabase.co';
+// Fallback URL is only used when Supabase is not configured — real traffic always goes to activeUrl
+const activeUrl = isSupabaseConfigured ? supabaseUrl : 'http://127.0.0.1:8000';
 const activeAnonKey = isSupabaseConfigured ? supabaseAnonKey : 'mock-anon-key-placeholder';
 
+// For local self-hosted Supabase, derive the WebSocket endpoint from the HTTP URL.
+// Supabase-js v2 automatically appends /realtime/v1 to the base URL, so no override needed.
 export const supabase = createClient(activeUrl, activeAnonKey, {
   auth: {
     persistSession: true,
@@ -38,6 +52,12 @@ export const supabase = createClient(activeUrl, activeAnonKey, {
   realtime: {
     params: {
       eventsPerSecond: 10,
+    },
+  },
+  global: {
+    headers: {
+      // Ensure the anon key is sent on every REST and realtime request
+      apikey: activeAnonKey,
     },
   },
 });
