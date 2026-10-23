@@ -23,7 +23,13 @@ export const LoginView: React.FC = () => {
     (typeof window !== 'undefined'
       ? sessionStorage.getItem('foodfax_post_login_redirect')
       : null);
-  const redirectPath = rawRedirect ? decodeURIComponent(rawRedirect) : '/';
+  const redirectPath =
+    rawRedirect &&
+    rawRedirect !== '/business' &&
+    !rawRedirect.startsWith('/business') &&
+    rawRedirect !== '/setup-shop'
+      ? decodeURIComponent(rawRedirect)
+      : '/';
 
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -66,15 +72,18 @@ export const LoginView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const loggedUser = await login(emailOrPhone.trim(), password);
+      await login(emailOrPhone.trim(), password);
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('foodfax_post_login_redirect');
       }
-      if (loggedUser.role === 'owner') {
-        navigate('/business');
-      } else {
-        navigate(redirectPath === '/business' ? '/' : redirectPath);
-      }
+      const target =
+        redirectPath &&
+        redirectPath !== '/business' &&
+        !redirectPath.startsWith('/business') &&
+        redirectPath !== '/setup-shop'
+          ? redirectPath
+          : '/';
+      navigate(target);
     } catch (err: any) {
       console.warn('[LoginView] Login note:', err?.message);
       setError(err?.message || 'Login failed. Please check your credentials.');

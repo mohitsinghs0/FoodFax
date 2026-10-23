@@ -26,6 +26,10 @@ import {
   Check
 } from 'lucide-react';
 
+// FoodFax Central Platform Merchant Details (All stalls route here; owners collect payout from platform)
+export const PLATFORM_UPI_ID = 'bharatpe2e0p0d8x5a59798@unitype';
+export const PLATFORM_MERCHANT_NAME = 'Mohit Santosh Singh';
+
 export const CheckoutView: React.FC = () => {
   const { navigate, goBack } = useRouter();
   const { currentUser, isAuthenticated, isLoading } = useAuth();
@@ -51,6 +55,9 @@ export const CheckoutView: React.FC = () => {
   const [merchantNotice, setMerchantNotice] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string>('');
   const [statusCheckMsg, setStatusCheckMsg] = useState<string | null>(null);
+  const [manualUtr, setManualUtr] = useState('');
+  const [showUtrInput, setShowUtrInput] = useState(false);
+  const [utrError, setUtrError] = useState<string | null>(null);
 
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isCommittingRef = useRef<boolean>(false);
@@ -199,13 +206,13 @@ export const CheckoutView: React.FC = () => {
     const queryIdx = baseLink.indexOf('?');
     const rawQuery = queryIdx !== -1 ? baseLink.slice(queryIdx + 1) : '';
     const params = new URLSearchParams(rawQuery);
-    const merchantPa = params.get('pa') || '';
-    const merchantPn = (params.get('pn') || shopName || 'FoodFax India').replace(/\+/g, ' ');
+    const merchantPa = params.get('pa') || PLATFORM_UPI_ID;
+    const merchantPn = (params.get('pn') || PLATFORM_MERCHANT_NAME).replace(/\+/g, ' ');
 
     if (merchantPa) {
       const formattedAmount = (Number(payableAmount || grandTotal) || 0).toFixed(2);
       const txnRef = params.get('tr') || upiData?.orderId || pendingOrderId || '';
-      const txnNote = (params.get('tn') || `Order ${pendingOrderId || upiData?.orderId || ''}`).replace(/\+/g, ' ');
+      const txnNote = (params.get('tn') || `FoodFax Order ${pendingOrderId || upiData?.orderId || ''}`).replace(/\+/g, ' ');
       const mc = params.get('mc') || '';
 
       const upiParams = new URLSearchParams();
@@ -318,10 +325,18 @@ export const CheckoutView: React.FC = () => {
     setPaymentStatus('WAITING');
     setPaymentUtr(null);
 
-    const targetUpiId = shopDetails?.upiId || 'rajputmohitsingh715@okyc';
-    const targetShopName = (shopName || shopDetails?.name || 'FoodFax India').replace(/\+/g, ' ');
+    // Central Platform Merchant Policy:
+    // All stalls route customer payments to Mohit Santosh Singh's merchant (BharatPe / UPIQRPay).
+    // Stall owners collect their payout from platform. Big shops with direct connector can be enabled in future.
+    const targetUpiId = (shopDetails?.enableDirectMerchant && shopDetails?.upiId)
+      ? shopDetails.upiId
+      : PLATFORM_UPI_ID;
+    const targetShopName = (shopDetails?.enableDirectMerchant && shopDetails?.name)
+      ? shopDetails.name
+      : PLATFORM_MERCHANT_NAME;
+    const orderNote = `FoodFax - ${shopName || shopDetails?.name || 'Stall Order'} (${orderRef})`;
     const formattedAmount = (grandTotal || 0).toFixed(2);
-    const instantUpiLink = `upi://pay?pa=${encodeURIComponent(targetUpiId)}&pn=${encodeURIComponent(targetShopName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(`Order ${orderRef}`)}&tr=${orderRef}`;
+    const instantUpiLink = `upi://pay?pa=${encodeURIComponent(targetUpiId)}&pn=${encodeURIComponent(targetShopName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(orderNote)}&tr=${orderRef}`;
     const instantQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(instantUpiLink)}`;
 
     // Set immediate working UPI QR so modal opens INSTANTLY in 0ms with zero loading delay!
@@ -432,6 +447,37 @@ export const CheckoutView: React.FC = () => {
       }
     } catch {
       setStatusCheckMsg('Checking with UPI gateway... Please wait a moment.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  /**
+   * Allows customer to confirm immediately with 12-digit UPI UTR if bank debited but gateway polling is delayed
+   */
+  const handleManualUtrSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualUtr.trim()) {
+      setUtrError('Please enter your 12-digit UPI Reference / UTR Number.');
+      return;
+    }
+    setUtrError(null);
+    setIsVerifying(true);
+    try {
+      const result = await paymentService.verifyAndValidateUtr({
+        utrNumber: manualUtr.trim(),
+        orderId: pendingOrderId || upiData?.orderId,
+        paymentId: upiData?.paymentId,
+      });
+
+      if (!result.valid) {
+        setUtrError(result.error || 'Invalid 12-digit UPI UTR number.');
+        return;
+      }
+
+      await handleGatewayConfirmedPayment(result.cleanedUtr);
+    } catch (err: any) {
+      setUtrError(err?.message || 'Verification failed. Please retry.');
     } finally {
       setIsVerifying(false);
     }
@@ -945,24 +991,62 @@ export const CheckoutView: React.FC = () => {
                   )}
 
                   {upiData?.paymentId && (
-                    <button
-                      type="button"
-                      onClick={handleCheckPaymentNow}
-                      disabled={isVerifying}
-                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      {isVerifying ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Checking Bank Status...</span>
-                        </>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={handleCheckPaymentNow}
+                        disabled={isVerifying}
+                        className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        {isVerifying ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Checking Bank Status...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>I Have Paid — Check Status Now</span>
+                          </>
+                        )}
+                      </button>
+
+                      {!showUtrInput ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowUtrInput(true)}
+                          className="w-full text-center text-[11px] font-bold text-blue-700 hover:underline cursor-pointer py-1"
+                        >
+                          Money deducted from bank? Enter 12-digit UTR to confirm instantly →
+                        </button>
                       ) : (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>I Have Paid — Check Status Now</span>
-                        </>
+                        <form onSubmit={handleManualUtrSubmit} className="space-y-2 pt-2 border-t border-blue-200">
+                          <label className="block text-[10px] font-bold text-slate-700">
+                            Enter 12-Digit UPI Reference / UTR Number (from GPay / PhonePe):
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={12}
+                              value={manualUtr}
+                              onChange={(e) => setManualUtr(e.target.value.replace(/\D/g, ''))}
+                              placeholder="e.g. 429612345678"
+                              className="flex-1 px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-none focus:border-blue-600"
+                            />
+                            <button
+                              type="submit"
+                              disabled={isVerifying || manualUtr.length < 12}
+                              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-bold transition-colors cursor-pointer shrink-0"
+                            >
+                              Verify UTR
+                            </button>
+                          </div>
+                          {utrError && (
+                            <p className="text-[10px] font-semibold text-rose-600">{utrError}</p>
+                          )}
+                        </form>
                       )}
-                    </button>
+                    </div>
                   )}
                 </div>
 

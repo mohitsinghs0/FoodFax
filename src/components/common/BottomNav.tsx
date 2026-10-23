@@ -7,11 +7,7 @@ import {
   Search, 
   ReceiptText, 
   Heart, 
-  User, 
-  LayoutDashboard, 
-  UtensilsCrossed, 
-  TrendingUp, 
-  MoreHorizontal 
+  User 
 } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
@@ -20,8 +16,8 @@ export const BottomNav: React.FC = () => {
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
 
   useEffect(() => {
-    // Only poll active customer orders if logged-in customer
-    if (!currentUser || currentUser?.role === 'owner') {
+    // Only poll active customer orders if logged-in
+    if (!currentUser) {
       setHasActiveOrder(false);
       return;
     }
@@ -41,79 +37,7 @@ export const BottomNav: React.FC = () => {
     checkActiveOrders();
     const interval = setInterval(checkActiveOrders, 5000);
     return () => clearInterval(interval);
-  }, [currentUser?.id, currentUser?.role]);
-
-  // If user is a Stall Owner, show Owner Quick Navigation
-  if (currentUser?.role === 'owner') {
-    const ownerNavItems = [
-      {
-        id: 'owner-nav-dashboard',
-        name: 'Overview',
-        icon: LayoutDashboard,
-        path: '/business',
-        isActive: route.name === 'business-dashboard',
-      },
-      {
-        id: 'owner-nav-orders',
-        name: 'Orders',
-        icon: ReceiptText,
-        path: '/business/orders',
-        isActive: route.name === 'business-orders' || route.name === 'business-order-detail',
-      },
-      {
-        id: 'owner-nav-menu',
-        name: 'Menu',
-        icon: UtensilsCrossed,
-        path: '/business/menu',
-        isActive: route.name === 'business-menu' || route.name === 'business-menu-new' || route.name === 'business-menu-edit',
-      },
-      {
-        id: 'owner-nav-sales',
-        name: 'Sales',
-        icon: TrendingUp,
-        path: '/business/sales',
-        isActive: route.name === 'business-sales',
-      },
-      {
-        id: 'owner-nav-more',
-        name: 'Settings',
-        icon: MoreHorizontal,
-        path: '/business/settings',
-        isActive: route.name === 'business-settings' || route.name === 'business-shop' || route.name === 'business-qr',
-      },
-    ];
-
-    return (
-      <nav
-        aria-label="Owner Mobile Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/98 dark:bg-slate-900/98 backdrop-blur-lg border-t border-slate-200/90 dark:border-slate-800 text-slate-800 dark:text-white safe-area-pb shadow-lg"
-      >
-        <div className="grid grid-cols-5 h-16 max-w-lg mx-auto">
-          {ownerNavItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                id={item.id}
-                onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
-                  item.isActive
-                    ? 'text-orange-600 dark:text-orange-400 font-bold'
-                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-                }`}
-              >
-                <Icon className={`w-5 h-5 ${item.isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
-                <span className="text-[10px] tracking-tight">{item.name}</span>
-                {item.isActive && (
-                  <span className="absolute bottom-1 w-1 h-1 rounded-full bg-orange-400" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-    );
-  }
+  }, [currentUser?.id]);
 
   // Customer & Visitor Navigation Items
   const customerNavItems = [

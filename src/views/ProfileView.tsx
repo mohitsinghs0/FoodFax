@@ -10,7 +10,6 @@ import {
   ShoppingBag, 
   Heart, 
   QrCode, 
-  Store, 
   LogOut, 
   Sliders, 
   ShieldCheck, 
@@ -106,8 +105,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
       setIsRemoving(false);
     }
   };
-
-  const isOwner = role === 'owner';
 
   return (
     <div className="py-4 sm:py-6 px-3.5 sm:px-6 max-w-2xl mx-auto space-y-5 sm:space-y-6 pb-28 min-w-0 overflow-x-hidden">
@@ -277,29 +274,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onOpenQRScanner }) => 
               </button>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Business Owner Switcher Banner */}
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-5 text-white shadow-md relative overflow-hidden">
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <span className="px-2 py-0.5 rounded bg-orange-500 text-[10px] font-extrabold uppercase tracking-wider text-white">
-              Food Stall Partner
-            </span>
-            <h3 className="text-base font-black mt-1">Run a Food Stall or Canteen?</h3>
-            <p className="text-xs text-slate-300 mt-0.5 max-w-sm">
-              Manage digital queue tokens, receive live orders, and toggle items instantly.
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate(isOwner ? '/business' : '/setup-shop')}
-            className="px-4 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 text-xs font-black shadow-xs flex items-center gap-1.5 self-start sm:self-auto transition-colors"
-          >
-            <Store className="w-4 h-4 text-orange-600" />
-            <span>{isOwner ? 'Open Stall Terminal' : 'Register Your Stall'}</span>
-          </button>
         </div>
       </div>
 

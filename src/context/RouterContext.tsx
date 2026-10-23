@@ -13,22 +13,7 @@ export type AppRoute =
   | 'profile'
   | 'login'
   | 'register'
-  | 'complete-profile'
-  | 'setup-shop'
-  // Business Owner Routes
-  | 'business-dashboard'
-  | 'business-orders'
-  | 'business-order-detail'
-  | 'business-history'
-  | 'business-menu'
-  | 'business-menu-new'
-  | 'business-menu-edit'
-  | 'business-availability'
-  | 'business-shop'
-  | 'business-qr'
-  | 'business-sales'
-  | 'business-notifications'
-  | 'business-settings';
+  | 'complete-profile';
 
 export interface RouteState {
   name: AppRoute;
@@ -61,64 +46,9 @@ export function parsePath(pathname: string): RouteState {
   }
   const params = { ...queryParams };
   
-  // Business Routes matching
-  if (clean === '/business' || clean === '/business/' || clean.startsWith('/business/dashboard')) {
-    return { name: 'business-dashboard', path: '/business', params: { ...params } };
-  }
-
-  if (clean === '/business/performance') {
-    return { name: 'business-dashboard', path: '/business', params: { ...params, tab: 'performance' } };
-  }
-
-  // /business/orders/:orderId
-  const bizOrderMatch = clean.match(/^\/business\/orders\/([^/]+)/);
-  if (bizOrderMatch && bizOrderMatch[1] !== '') {
-    return { name: 'business-order-detail', path: clean, params: { ...params, orderId: bizOrderMatch[1] } };
-  }
-
-  if (clean === '/business/orders') {
-    return { name: 'business-orders', path: '/business/orders', params: { ...params } };
-  }
-
-  if (clean === '/business/history') {
-    return { name: 'business-history', path: '/business/history', params: { ...params } };
-  }
-
-  if (clean === '/business/menu/new') {
-    return { name: 'business-menu-new', path: '/business/menu/new', params: { ...params } };
-  }
-
-  const bizMenuEditMatch = clean.match(/^\/business\/menu\/([^/]+)/);
-  if (bizMenuEditMatch && bizMenuEditMatch[1] !== '') {
-    return { name: 'business-menu-edit', path: clean, params: { ...params, itemId: bizMenuEditMatch[1] } };
-  }
-
-  if (clean === '/business/menu') {
-    return { name: 'business-menu', path: '/business/menu', params: { ...params } };
-  }
-
-  if (clean === '/business/availability') {
-    return { name: 'business-availability', path: '/business/availability', params: { ...params } };
-  }
-
-  if (clean === '/business/shop') {
-    return { name: 'business-shop', path: '/business/shop', params: { ...params } };
-  }
-
-  if (clean === '/business/qr') {
-    return { name: 'business-qr', path: '/business/qr', params: { ...params } };
-  }
-
-  if (clean === '/business/sales') {
-    return { name: 'business-sales', path: '/business/sales', params: { ...params } };
-  }
-
-  if (clean === '/business/notifications') {
-    return { name: 'business-notifications', path: '/business/notifications', params: { ...params } };
-  }
-
-  if (clean === '/business/settings') {
-    return { name: 'business-settings', path: '/business/settings', params: { ...params } };
+  // Guard against legacy business routes and stall setup in customer app
+  if (clean.startsWith('/business') || clean === '/setup-shop') {
+    return { name: 'home', path: '/', params: { ...params } };
   }
 
   // Customer Routes matching
@@ -185,10 +115,6 @@ export function parsePath(pathname: string): RouteState {
 
   if (clean === '/complete-profile') {
     return { name: 'complete-profile', path: '/complete-profile', params: { ...params } };
-  }
-
-  if (clean === '/setup-shop') {
-    return { name: 'setup-shop', path: '/setup-shop', params: { ...params } };
   }
 
   return { name: 'home', path: '/', params: { ...params } };

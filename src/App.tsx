@@ -33,20 +33,6 @@ import { ProfileView } from './views/ProfileView';
 import { LoginView } from './views/LoginView';
 import { RegisterView } from './views/RegisterView';
 import { CompleteProfileView } from './views/CompleteProfileView';
-import { SetupShopView } from './views/business/SetupShopView';
-
-// Business Ecosystem Views
-import { BusinessDashboardView } from './views/business/BusinessDashboardView';
-import { BusinessOrdersView } from './views/business/BusinessOrdersView';
-import { BusinessOrderDetailView } from './views/business/BusinessOrderDetailView';
-import { BusinessMenuView } from './views/business/BusinessMenuView';
-import { BusinessItemFormView } from './views/business/BusinessItemFormView';
-import { BusinessAvailabilityView } from './views/business/BusinessAvailabilityView';
-import { BusinessShopProfileView } from './views/business/BusinessShopProfileView';
-import { BusinessQRView } from './views/business/BusinessQRView';
-import { BusinessSalesView } from './views/business/BusinessSalesView';
-import { BusinessNotificationsView } from './views/business/BusinessNotificationsView';
-import { BusinessSettingsView } from './views/business/BusinessSettingsView';
 import { firestoreSync } from './services/firestoreSyncService';
 
 const AppContent: React.FC = () => {
@@ -68,62 +54,6 @@ const AppContent: React.FC = () => {
 
     return () => unsub();
   }, []);
-
-  const isBusinessRoute = route && route.name.startsWith('business-');
-
-  // If inside business dashboard ecosystem, render appropriate business view directly
-  if (isBusinessRoute) {
-    let businessView: React.ReactNode;
-    switch (route.name) {
-      case 'business-dashboard':
-        businessView = <BusinessDashboardView />;
-        break;
-      case 'business-orders':
-      case 'business-history':
-        businessView = <BusinessOrdersView />;
-        break;
-      case 'business-order-detail':
-        businessView = <BusinessOrderDetailView />;
-        break;
-      case 'business-menu':
-        businessView = <BusinessMenuView />;
-        break;
-      case 'business-menu-new':
-      case 'business-menu-edit':
-        businessView = <BusinessItemFormView />;
-        break;
-      case 'business-availability':
-        businessView = <BusinessAvailabilityView />;
-        break;
-      case 'business-shop':
-        businessView = <BusinessShopProfileView />;
-        break;
-      case 'business-qr':
-        businessView = <BusinessQRView />;
-        break;
-      case 'business-sales':
-        businessView = <BusinessSalesView />;
-        break;
-      case 'business-notifications':
-        businessView = <BusinessNotificationsView />;
-        break;
-      case 'business-settings':
-        businessView = <BusinessSettingsView />;
-        break;
-      default:
-        businessView = <BusinessDashboardView />;
-        break;
-    }
-
-    return (
-      <>
-        <GlobalLoadingSkeleton isSyncing={isSyncing} isInitialLoad={false} />
-        <ProtectedRoute requiredRole="owner" redirectTo="/business">
-          {businessView}
-        </ProtectedRoute>
-      </>
-    );
-  }
 
   // Render customer views
   const renderCustomerView = () => {
@@ -149,7 +79,7 @@ const AppContent: React.FC = () => {
         return <SavedShopsView />;
       case 'profile':
         return (
-          <ProtectedRoute requiredRole="customer" redirectTo="/profile">
+          <ProtectedRoute redirectTo="/profile">
             <ProfileView onOpenQRScanner={() => setIsQRScannerOpen(true)} />
           </ProtectedRoute>
         );
@@ -159,8 +89,6 @@ const AppContent: React.FC = () => {
         return <RegisterView />;
       case 'complete-profile':
         return <CompleteProfileView />;
-      case 'setup-shop':
-        return <SetupShopView />;
       default:
         return <HomeView onOpenQRScanner={() => setIsQRScannerOpen(true)} />;
     }
@@ -170,8 +98,7 @@ const AppContent: React.FC = () => {
     route &&
     (route.name === 'login' ||
       route.name === 'register' ||
-      route.name === 'complete-profile' ||
-      route.name === 'setup-shop');
+      route.name === 'complete-profile');
 
   return (
     <div className="min-h-screen min-h-[100dvh] w-full overflow-x-hidden bg-[#F8F9FA] text-slate-900 flex flex-col font-sans selection:bg-orange-500 selection:text-white relative">
@@ -190,7 +117,7 @@ const AppContent: React.FC = () => {
       <Header onOpenQRScanner={() => setIsQRScannerOpen(true)} />
 
       {/* Live Sticky Active Order Tracker Banner (Real-time token calls across all pages) */}
-      {!isBusinessRoute && <ActiveOrderBanner />}
+      <ActiveOrderBanner />
 
       {/* Main Page Area */}
       <main id="main-content" tabIndex={-1} className="flex-1 w-full max-w-7xl mx-auto focus:outline-none overflow-x-hidden min-w-0">

@@ -14,7 +14,6 @@ import {
   LogIn, 
   User, 
   LogOut, 
-  Store,
   Receipt,
   UserPlus,
   Sliders
@@ -28,7 +27,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
   const { route, navigate } = useRouter();
   const { totalItems } = useCart();
-  const { currentUser, isAuthenticated, currentBusiness, logout } = useAuth();
+  const { currentUser, isAuthenticated, logout } = useAuth();
   const { openA11yModal, highContrast } = useAccessibility();
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -238,77 +237,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenQRScanner }) => {
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>Register</span>
               </button>
-            </div>
-          ) : currentUser.role === 'owner' ? (
-            // OWNER AUTHENTICATED STATE: Stall Dashboard & Owner Controls
-            <div className="relative" ref={dropdownRef}>
-              <button
-                id="header-owner-badge"
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
-              >
-                <Store className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
-                <span className="truncate max-w-[85px] xs:max-w-[110px] sm:max-w-[150px]">
-                  {currentBusiness?.name || 'Stall Owner'}
-                </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              </button>
-
-              {userDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-4 py-2 border-b border-slate-100">
-                    <div className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
-                      Stall Owner Account
-                    </div>
-                    <div className="font-bold text-xs text-slate-900 truncate">
-                      {currentUser.fullName}
-                    </div>
-                    <div className="text-[11px] text-slate-500 truncate">
-                      {currentBusiness?.name || 'My Stall'}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setUserDropdownOpen(false);
-                      navigate('/business');
-                    }}
-                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                  >
-                    <Store className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Owner Dashboard</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setUserDropdownOpen(false);
-                      navigate('/business/orders');
-                    }}
-                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                  >
-                    <Receipt className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Live Counter Orders</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setUserDropdownOpen(false);
-                      navigate('/');
-                    }}
-                    className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
-                  >
-                    <span>View Customer Web App</span>
-                  </button>
-
-                  <button
-                    onClick={handleLogout}
-                    className="w-full px-4 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 border-t border-slate-100"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              )}
             </div>
           ) : (
             // CUSTOMER AUTHENTICATED STATE: Profile Dropdown

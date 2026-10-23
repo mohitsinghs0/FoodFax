@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from '../../context/RouterContext';
 import { UserRole } from '../../types';
-import { ShieldAlert, ArrowLeft, Store, LogIn } from 'lucide-react';
+import { ShieldAlert, ArrowLeft, LogIn } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -15,7 +15,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRole,
   redirectTo,
 }) => {
-  const { currentUser, isAuthenticated, isLoading, loginAsDemoOwner, logout } = useAuth();
+  const { currentUser, isAuthenticated, isLoading } = useAuth();
   const { route, navigate } = useRouter();
 
   // Show subtle loading state while session is being verified from storage/remote
@@ -30,7 +30,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // 1. Unauthenticated Check
   if (!isAuthenticated || !currentUser) {
-    const targetRedirect = redirectTo || route.path || '/';
+    const rawTarget = redirectTo || route.path || '/';
+    const targetRedirect =
+      rawTarget.startsWith('/business') || rawTarget === '/setup-shop' ? '/' : rawTarget;
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center p-4 sm:p-6 text-center animate-in fade-in duration-200">
         <div className="bg-white max-w-md w-full rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm space-y-5">
@@ -68,54 +70,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // 2. Role-Based Access Control
-  if (requiredRole && currentUser.role !== requiredRole) {
-    // If a Customer attempts to open Owner routes (/business/*)
-    if (requiredRole === 'owner') {
-      return (
-        <div className="min-h-[70vh] flex flex-col items-center justify-center p-4 sm:p-6 text-center animate-in fade-in duration-200">
-          <div className="bg-white max-w-md w-full rounded-3xl border border-rose-200/80 p-6 sm:p-8 shadow-sm space-y-5">
-            <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
-              <ShieldAlert className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase tracking-wider">
-                Restricted Access
-              </span>
-              <h2 className="text-xl font-black text-slate-900 tracking-tight pt-1">
-                Stall Owner Account Required
-              </h2>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                You are currently signed in as a <strong className="text-slate-800 font-semibold">Customer</strong> ({currentUser.fullName}). Only registered stall owners can access live counter orders, menu availability, and sales analytics.
-              </p>
-            </div>
-
-            <div className="space-y-2.5 pt-2">
-              <button
-                onClick={() => navigate('/')}
-                className="w-full py-3 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-md shadow-orange-500/20"
-              >
-                Return to Customer Ordering
-              </button>
-
-              <button
-                onClick={async () => {
-                  await logout();
-                  navigate('/login?redirect=/business');
-                }}
-                className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-colors flex items-center justify-center gap-2"
-              >
-                <Store className="w-4 h-4 text-slate-600" />
-                <span>Sign in with Stall Owner Account</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Role mismatch for other roles
+  // 2. Role-Based Access Control (if specifically enforcing non-customer roles)
+  if (requiredRole && requiredRole !== 'customer' && currentUser.role !== requiredRole) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
         <ShieldAlert className="w-12 h-12 text-amber-500 mb-2" />

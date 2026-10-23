@@ -18,7 +18,13 @@ export const RegisterView: React.FC = () => {
     (typeof window !== 'undefined'
       ? sessionStorage.getItem('foodfax_post_login_redirect')
       : null);
-  const redirectPath = rawRedirect ? decodeURIComponent(rawRedirect) : '/';
+  const redirectPath =
+    rawRedirect &&
+    rawRedirect !== '/business' &&
+    !rawRedirect.startsWith('/business') &&
+    rawRedirect !== '/setup-shop'
+      ? decodeURIComponent(rawRedirect)
+      : '/';
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -70,7 +76,11 @@ export const RegisterView: React.FC = () => {
         sessionStorage.removeItem('foodfax_post_login_redirect');
       }
       navigate(
-        redirectPath && redirectPath !== '/business' && redirectPath !== '/'
+        redirectPath &&
+        redirectPath !== '/business' &&
+        !redirectPath.startsWith('/business') &&
+        redirectPath !== '/setup-shop' &&
+        redirectPath !== '/'
           ? redirectPath
           : '/complete-profile'
       );

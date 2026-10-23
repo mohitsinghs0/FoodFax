@@ -32,6 +32,7 @@ export interface Shop {
   openingTime?: string;
   closingTime?: string;
   upiId?: string;
+  enableDirectMerchant?: boolean;
   address?: string;
   area?: string;
   city?: string;
@@ -269,6 +270,7 @@ export interface OwnerBusinessContext {
   openingTime?: string;
   closingTime?: string;
   upiId?: string;
+  enableDirectMerchant?: boolean;
   isOpen?: boolean;
   isActive?: boolean;
   image?: string;
