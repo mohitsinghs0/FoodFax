@@ -48,13 +48,148 @@ interface HomeViewProps {
 }
 
 // Curated high-res imagery for food categories (matching street food platforms)
+export function getCategoryVisual(category: { id?: string; name?: string }): {
+  imageUrl: string;
+  cleanName: string;
+} {
+  const idStr = String(category.id || '').toLowerCase();
+  const nameStr = String(category.name || '').toLowerCase();
+  const combined = `${idStr} ${nameStr}`;
+
+  // 1. South Indian / Dosa / Idli
+  if (combined.includes('south') || combined.includes('dosa') || combined.includes('idli')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'South Indian',
+    };
+  }
+
+  // 2. Vada Pav
+  if (combined.includes('vada') || combined.includes('batata')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Vada Pav',
+    };
+  }
+
+  // 3. Chaat / Sev Puri / Pani Puri / Bhel
+  if (combined.includes('chaat') || combined.includes('pani puri') || combined.includes('sev puri') || combined.includes('bhel')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Chaat',
+    };
+  }
+
+  // 4. Chai & Hot Beverages / Tea / Coffee
+  if (combined.includes('chai') || combined.includes('tea') || combined.includes('coffee')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Chai & Tea',
+    };
+  }
+
+  // 5. Refreshing Drinks / Cold Beverages / Juices / Shakes
+  if (combined.includes('refresh') || combined.includes('drink') || combined.includes('juice') || combined.includes('beverage')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Cold Drinks',
+    };
+  }
+
+  // 6. Rolls & Wraps / Frankie
+  if (combined.includes('roll') || combined.includes('frankie') || combined.includes('wrap')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Rolls & Wraps',
+    };
+  }
+
+  // 7. Thali & Meals / Combos
+  if (combined.includes('thali') || combined.includes('meal')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Thali & Meals',
+    };
+  }
+
+  // 8. Desserts & Shakes / Sweets / Ice cream
+  if (combined.includes('dessert') || combined.includes('shake') || combined.includes('sweet') || combined.includes('kulfi') || combined.includes('ice cream')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Desserts',
+    };
+  }
+
+  // 9. Chinese / Noodles / Manchurian
+  if (combined.includes('chinese') || combined.includes('noodle') || combined.includes('manchurian') || combined.includes('wok')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Chinese',
+    };
+  }
+
+  // 10. Burgers
+  if (combined.includes('burger')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Burgers',
+    };
+  }
+
+  // 11. Sandwiches
+  if (combined.includes('sandwich') || combined.includes('toast')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Sandwiches',
+    };
+  }
+
+  // 12. Pizza
+  if (combined.includes('pizza')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Pizza',
+    };
+  }
+
+  // 13. Momos
+  if (combined.includes('momo') || combined.includes('dim sum')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Momos',
+    };
+  }
+
+  // 14. Snacks / Starters / Treats / Samosa
+  if (combined.includes('snack') || combined.includes('starter') || combined.includes('treat') || combined.includes('samosa') || combined.includes('kachori')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
+      cleanName: combined.includes('treat') ? 'Snacks & Treats' : 'Snacks',
+    };
+  }
+
+  // 15. Fast Food / Pav Bhaji
+  if (combined.includes('fast') || combined.includes('pav bhaji')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Fast Food',
+    };
+  }
+
+  // Default: Authentic street food plate
+  return {
+    imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=300&q=80',
+    cleanName: category.name || 'Street Food',
+  };
+}
+
 const CATEGORY_IMAGE_MAP: Record<string, string> = {
   'all': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=300&q=80',
   'vada-pav': 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
   'snacks': 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
   'tea-coffee': 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=300&q=80',
   'sandwich': 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=300&q=80',
-  'fast-food': 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=300&q=80',
+  'fast-food': 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=300&q=80',
   'juice': 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80',
   'breakfast': 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=300&q=80',
   'pizza': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80',
@@ -255,8 +390,24 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
       // 2. Fetch categories asynchronously
       shopService.getCategories().then((cats) => {
         if (!isMounted) return;
-        const existingIds = new Set(cats.map(c => c.id));
-        const enhancedCats = [...cats];
+
+        // Deduplicate categories by normalized food theme so user never sees duplicate chips
+        const seenNames = new Set<string>();
+        const uniqueCats: ShopCategory[] = [];
+
+        for (const cat of cats) {
+          const visual = getCategoryVisual(cat);
+          const normalizedKey = visual.cleanName.toLowerCase().replace(/[^a-z]/g, '');
+          if (!seenNames.has(normalizedKey)) {
+            seenNames.add(normalizedKey);
+            uniqueCats.push({
+              ...cat,
+              name: cat.name || visual.cleanName,
+            });
+          }
+        }
+
+        // Add staple categories if not already represented in database categories
         const staples = [
           { id: 'pizza', name: 'Pizza', iconName: 'Flame', description: 'Cheese street pizzas' },
           { id: 'burger', name: 'Burgers', iconName: 'Store', description: 'Burgers & buns' },
@@ -264,10 +415,16 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           { id: 'chinese', name: 'Chinese Wok', iconName: 'Utensils', description: 'Hakka noodles & Manchurian' },
           { id: 'thali', name: 'Thali & Meals', iconName: 'Store', description: 'Desi full meal combos' },
         ];
-        staples.forEach(s => {
-          if (!existingIds.has(s.id)) enhancedCats.push(s as ShopCategory);
+        staples.forEach((s) => {
+          const visual = getCategoryVisual(s);
+          const normalizedKey = visual.cleanName.toLowerCase().replace(/[^a-z]/g, '');
+          if (!seenNames.has(normalizedKey)) {
+            seenNames.add(normalizedKey);
+            uniqueCats.push(s as ShopCategory);
+          }
         });
-        setCategories(enhancedCats);
+
+        setCategories(uniqueCats);
       }).catch(() => {});
 
       // 3. Fetch recent customer orders in background without delaying shops
@@ -430,13 +587,23 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
 
       // Category filter
       if (selectedCategory !== 'all') {
-        const hasCat = shop.categories && shop.categories.some(c => 
-          c.toLowerCase() === selectedCategory.toLowerCase() ||
-          c.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-          selectedCategory.toLowerCase().includes(c.toLowerCase())
+        const selObj = categories.find((c) => c.id === selectedCategory);
+        const selVisual = selObj ? getCategoryVisual(selObj) : null;
+        const selKeywords = [
+          selectedCategory.toLowerCase(),
+          selObj?.name?.toLowerCase() || '',
+          selVisual?.cleanName.toLowerCase() || '',
+        ].filter(Boolean);
+
+        const hasCat = shop.categories && shop.categories.some((c) => {
+          const cl = c.toLowerCase();
+          return selKeywords.some((kw) => cl.includes(kw) || kw.includes(cl));
+        });
+
+        const nameMatch = selKeywords.some((kw) =>
+          shop.name.toLowerCase().includes(kw) || shop.tagline.toLowerCase().includes(kw)
         );
-        const nameMatch = shop.name.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-          shop.tagline.toLowerCase().includes(selectedCategory.toLowerCase());
+
         if (!hasCat && !nameMatch) return false;
       }
 
@@ -455,13 +622,23 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
     if (list.length === 0 && (distanceFilter === '2km' || distanceFilter === '4km') && processedShops.length > 0) {
       return processedShops.filter(shop => {
         if (selectedCategory !== 'all') {
-          const hasCat = shop.categories && shop.categories.some(c => 
-            c.toLowerCase() === selectedCategory.toLowerCase() ||
-            c.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-            selectedCategory.toLowerCase().includes(c.toLowerCase())
+          const selObj = categories.find((c) => c.id === selectedCategory);
+          const selVisual = selObj ? getCategoryVisual(selObj) : null;
+          const selKeywords = [
+            selectedCategory.toLowerCase(),
+            selObj?.name?.toLowerCase() || '',
+            selVisual?.cleanName.toLowerCase() || '',
+          ].filter(Boolean);
+
+          const hasCat = shop.categories && shop.categories.some((c) => {
+            const cl = c.toLowerCase();
+            return selKeywords.some((kw) => cl.includes(kw) || kw.includes(cl));
+          });
+
+          const nameMatch = selKeywords.some((kw) =>
+            shop.name.toLowerCase().includes(kw) || shop.tagline.toLowerCase().includes(kw)
           );
-          const nameMatch = shop.name.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-            shop.tagline.toLowerCase().includes(selectedCategory.toLowerCase());
+
           if (!hasCat && !nameMatch) return false;
         }
         if (onlyOpen && !shop.isOpen) return false;
@@ -783,14 +960,16 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           >
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
-              const imageUrl = CATEGORY_IMAGE_MAP[cat.id] || CATEGORY_IMAGE_MAP['all'];
+              const { imageUrl, cleanName } = getCategoryVisual(cat);
+              const displayName = cat.name || cleanName;
 
               return (
                 <button
                   key={cat.id}
                   id={`cat-chip-${cat.id}`}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className="flex flex-col items-center gap-2 shrink-0 group/cat focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-2xl transition-transform active:scale-95"
+                  onClick={() => setSelectedCategory(selectedCategory === cat.id ? 'all' : cat.id)}
+                  title={displayName}
+                  className="flex flex-col items-center gap-2 shrink-0 group/cat focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-2xl transition-transform active:scale-95 cursor-pointer"
                 >
                   {/* Circular Food Photo */}
                   <div className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden transition-all duration-200 ${
@@ -800,7 +979,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
                   }`}>
                     <img
                       src={imageUrl}
-                      alt={cat.name}
+                      alt={displayName}
                       className="w-full h-full object-cover group-hover/cat:scale-110 transition-transform duration-300"
                       loading="lazy"
                     />
@@ -810,10 +989,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
                   </div>
 
                   {/* Category Name */}
-                  <span className={`text-[11px] sm:text-xs font-bold text-center line-clamp-1 max-w-[76px] transition-colors ${
+                  <span className={`text-[11px] sm:text-xs font-bold text-center line-clamp-1 max-w-[80px] sm:max-w-[88px] transition-colors ${
                     isSelected ? 'text-orange-600 font-black' : 'text-slate-700 group-hover/cat:text-slate-900'
                   }`}>
-                    {cat.name}
+                    {displayName}
                   </span>
                 </button>
               );

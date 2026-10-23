@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  'https://aftmqdmiwvpbpsdmsfbu.supabase.co';
+  'http://127.0.0.1:8000';
 const PLATFORM_UPIQRPAY_API_KEY =
   process.env.UPIQRPAY_API_KEY ||
   process.env.VITE_UPIQRPAY_API_KEY ||
@@ -16,7 +16,7 @@ function getSupabaseServer() {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmdG1xZG1pd3ZwYnBzZG1zZmJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwOTA4NDgsImV4cCI6MjEwNTY2Njg0OH0.c6_X6H2aLyYMH_Sg9EA9tVQr-tpHY8s9Nyjo_HznBlE';
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNTE3Njk3LCJleHAiOjE5NTAxOTc2OTd9.m-Kkdq0uf2fr0365ulaLFOW-kWdXO35kaZnJSV_oCwo';
   return createClient(SUPABASE_URL, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -78,15 +78,21 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
       return;
     }
 
-    const supabase = getSupabaseServer();
+    let orderAmount = Number(amount || 0);
+    let orderShopId = shop_id || null;
     let order: any = null;
-    try {
-      const { data } = await supabase.from('orders').select('*').eq('id', order_id).maybeSingle();
-      if (data) order = data;
-    } catch {}
 
-    const orderAmount = order ? Number(order.total) : Number(amount || 0);
-    const orderShopId = order ? order.shop_id : shop_id || null;
+    if (!orderAmount || orderAmount <= 0) {
+      try {
+        const supabase = getSupabaseServer();
+        const { data } = await supabase.from('orders').select('*').eq('id', order_id).maybeSingle();
+        if (data) {
+          order = data;
+          orderAmount = Number(data.total || 0);
+          if (!orderShopId) orderShopId = data.shop_id;
+        }
+      } catch {}
+    }
 
     if (!orderAmount || orderAmount <= 0) {
       sendJson(res, 400, { success: false, message: `Invalid order amount for ${order_id}.` });
@@ -96,11 +102,17 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     let shopApiKey = PLATFORM_UPIQRPAY_API_KEY;
     if (orderShopId) {
       try {
-        const { data: shopData } = await supabase
+        const supabase = getSupabaseServer();
+        const timeoutPromise = new Promise<{ data: null }>((resolve) =>
+          setTimeout(() => resolve({ data: null }), 1000)
+        );
+        const shopPromise = supabase
           .from('shops')
           .select('upiqrpay_api_key')
-          .eq('id', orderShopId)
+          .or(`id.eq.${orderShopId},slug.eq.${orderShopId}`)
           .maybeSingle();
+
+        const { data: shopData } = await Promise.race([shopPromise, timeoutPromise]);
         if (shopData?.upiqrpay_api_key) {
           shopApiKey = shopData.upiqrpay_api_key.trim();
         }

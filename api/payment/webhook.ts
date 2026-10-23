@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  'https://aftmqdmiwvpbpsdmsfbu.supabase.co';
+  'http://127.0.0.1:8000';
 const PLATFORM_WEBHOOK_SECRET = process.env.UPIQRPAY_WEBHOOK_SECRET || '';
 
 function getSupabaseServer() {
@@ -13,7 +13,7 @@ function getSupabaseServer() {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmdG1xZG1pd3ZwYnBzZG1zZmJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwOTA4NDgsImV4cCI6MjEwNTY2Njg0OH0.c6_X6H2aLyYMH_Sg9EA9tVQr-tpHY8s9Nyjo_HznBlE';
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkyNTE3Njk3LCJleHAiOjE5NTAxOTc2OTd9.m-Kkdq0uf2fr0365ulaLFOW-kWdXO35kaZnJSV_oCwo';
   return createClient(SUPABASE_URL, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

@@ -1196,9 +1196,24 @@ class SupabaseSyncService {
           ? 'PENDING'
           : order.paymentStatus || 'PENDING';
 
+      // 0. Resolve canonical shop primary key in case order.shopId was a slug or custom reference
+      let resolvedShopId = order.shopId;
+      try {
+        const { data: matchedShop } = await supabase
+          .from('shops')
+          .select('id')
+          .or(`id.eq.${order.shopId},slug.eq.${order.shopId}`)
+          .maybeSingle();
+        if (matchedShop?.id) {
+          resolvedShopId = matchedShop.id;
+        }
+      } catch (resolveErr) {
+        console.warn('[Supabase] Warning resolving shop ID:', resolveErr);
+      }
+
       const dbOrder = {
         id: order.id,
-        shop_id: order.shopId,
+        shop_id: resolvedShopId,
         shop_name: order.shopName,
         shop_image: order.shopImage,
         shop_location: order.shopLocation,
@@ -1230,7 +1245,11 @@ class SupabaseSyncService {
       };
 
       // 1. Save in orders table
-      await supabase.from('orders').upsert(dbOrder);
+      const { error: orderError } = await supabase.from('orders').upsert(dbOrder);
+      if (orderError) {
+        console.error('[Supabase] Error saving order to PostgreSQL:', orderError);
+        throw orderError;
+      }
 
       // 2. Save line items in order_items table
       if (order.items && order.items.length > 0) {
@@ -1244,15 +1263,19 @@ class SupabaseSyncService {
           is_veg: it.isVeg,
           created_at: order.createdAt || new Date().toISOString(),
         }));
-        await supabase.from('order_items').upsert(orderItemRows);
+        const { error: itemsError } = await supabase.from('order_items').upsert(orderItemRows);
+        if (itemsError) {
+          console.error('[Supabase] Error saving order_items:', itemsError);
+        }
       }
 
       // 3. Save payment record in payments table (with UTR in transaction_id)
       if (order.paymentMethod === 'PAY_ONLINE' || order.utrNumber) {
         const now = new Date().toISOString();
-        await supabase.from('payments').upsert({
+        const { error: payError } = await supabase.from('payments').upsert({
           id: `pay-${order.id}`,
           order_id: order.id,
+          shop_id: resolvedShopId,
           payment_mode: order.paymentMethod || 'PAY_ONLINE',
           payment_status: safePaymentStatus,
           amount: order.total,
@@ -1261,12 +1284,19 @@ class SupabaseSyncService {
           paid_at: safePaymentStatus === 'PAID' ? now : null,
           updated_at: now,
         });
+        if (payError) {
+          console.error('[Supabase] Error saving payments:', payError);
+        }
       }
 
       // 4. Notify listeners
-      notifyDatabaseOrderCommitted(order);
+      notifyDatabaseOrderCommitted({
+        ...order,
+        shopId: resolvedShopId,
+      });
     } catch (err) {
-      console.warn('[Supabase] Error saving order:', err);
+      console.error('[Supabase] Error saving order:', err);
+      throw err;
     } finally {
       this.endSync();
     }
@@ -1912,12 +1942,22 @@ class SupabaseSyncService {
     // 3. Check remote orders created TODAY for this shop in database
     if (isSupabaseConfigured) {
       try {
+        let canonicalShopId = shopId;
+        try {
+          const { data: matchedShop } = await supabase
+            .from('shops')
+            .select('id')
+            .or(`id.eq.${shopId},slug.eq.${shopId}`)
+            .maybeSingle();
+          if (matchedShop?.id) canonicalShopId = matchedShop.id;
+        } catch {}
+
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
         const { data: todayOrders } = await supabase
           .from('orders')
           .select('token_number, created_at, is_demo')
-          .eq('shop_id', shopId)
+          .or(`shop_id.eq.${canonicalShopId},shop_id.eq.${shopId}`)
           .gte('created_at', startOfDay.toISOString());
 
         if (todayOrders && Array.isArray(todayOrders)) {

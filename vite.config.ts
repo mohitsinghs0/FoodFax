@@ -1,33 +1,55 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { handlePaymentRequest } from './server/paymentHandler.ts';
+
 function upiqrpayApiPlugin(): Plugin {
   return {
     name: 'upiqrpay-api-plugin',
     configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
+      server.middlewares.use((req, res, next) => {
         if (req.url && req.url.startsWith('/api/payment')) {
-          try {
-            const { handlePaymentRequest } = await import('./server/paymentHandler.ts');
-            const handled = await handlePaymentRequest(req, res);
-            if (handled) return;
-          } catch (err) {
-            console.error('[PaymentPlugin] Error handling request:', err);
-          }
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+          req.on('end', async () => {
+            (req as any).body = Buffer.concat(chunks).toString('utf8');
+            try {
+              const handled = await handlePaymentRequest(req, res);
+              if (handled) return;
+            } catch (err) {
+              console.error('[PaymentPlugin] Error handling request:', err);
+            }
+            next();
+          });
+          req.on('error', (err) => {
+            console.error('[PaymentPlugin] Request stream error:', err);
+            next(err);
+          });
+          return;
         }
         next();
       });
     },
     configurePreviewServer(server) {
-      server.middlewares.use(async (req, res, next) => {
+      server.middlewares.use((req, res, next) => {
         if (req.url && req.url.startsWith('/api/payment')) {
-          try {
-            const { handlePaymentRequest } = await import('./server/paymentHandler.ts');
-            const handled = await handlePaymentRequest(req, res);
-            if (handled) return;
-          } catch (err) {
-            console.error('[PaymentPlugin] Error handling preview request:', err);
-          }
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+          req.on('end', async () => {
+            (req as any).body = Buffer.concat(chunks).toString('utf8');
+            try {
+              const handled = await handlePaymentRequest(req, res);
+              if (handled) return;
+            } catch (err) {
+              console.error('[PaymentPlugin] Error handling preview request:', err);
+            }
+            next();
+          });
+          req.on('error', (err) => {
+            console.error('[PaymentPlugin] Request stream error:', err);
+            next(err);
+          });
+          return;
         }
         next();
       });

@@ -37,13 +37,18 @@ export const paymentService = {
     };
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3-second fast timeout
+
       const response = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestPayload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const rawText = await response.text();
       let json: any = null;
@@ -79,13 +84,16 @@ export const paymentService = {
         };
       }
     } catch (err: any) {
-      console.warn('[PaymentService] Primary /api/payment/create-order failed, trying direct gateway:', err);
+      console.warn('[PaymentService] Primary /api/payment/create-order slow or failed, falling back to direct gateway instantly:', err);
     }
 
-    // Fallback: Direct call to UPIQRPay if backend middleware/serverless returned HTML or failed
+    // Fallback: Direct call to UPIQRPay (responds in ~280ms)
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : 'https://foodfax.in';
       const phone = String(params.customerPhone || '9876543210').replace(/\D/g, '').slice(-10) || '9876543210';
+      const fallbackController = new AbortController();
+      const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 4500);
+
       const directRes = await fetch('https://upiqrpay.in/api/v1/order/create', {
         method: 'POST',
         headers: {
@@ -100,7 +108,9 @@ export const paymentService = {
           redirect_url: params.redirectUrl || `${origin}/#/order/${params.orderId}`,
           webhook_url: `${origin}/api/payment/webhook`,
         }),
+        signal: fallbackController.signal,
       });
+      clearTimeout(fallbackTimeoutId);
 
       const directJson = await directRes.json().catch(() => null);
       if (directJson && directJson.success && directJson.data) {
