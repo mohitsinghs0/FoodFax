@@ -29,15 +29,13 @@ export const ActiveOrderBanner: React.FC = () => {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
-  // If user is currently looking at the tracker view for THIS order or is owner, hide the banner
+  // If user is currently looking at the tracker view for THIS order, hide the banner
   const isCurrentlyTrackingThisOrder = 
     route.name === 'order-tracker' && 
     (route.params.orderId === activeOrder?.id || route.params.orderId === unreviewedCompletedOrder?.id);
 
-  const isOwner = currentUser?.role === 'owner';
-
   useEffect(() => {
-    if (!currentUser || isOwner) {
+    if (!currentUser) {
       setActiveOrder(null);
       setUnreviewedCompletedOrder(null);
       return;
@@ -97,9 +95,9 @@ export const ActiveOrderBanner: React.FC = () => {
       if (unsub) unsub();
       clearInterval(interval);
     };
-  }, [currentUser?.id, isOwner, announce, dismissedFeedbackIds]);
+  }, [currentUser?.id, announce, dismissedFeedbackIds]);
 
-  if (isCurrentlyTrackingThisOrder || isOwner) {
+  if (isCurrentlyTrackingThisOrder) {
     return null;
   }
 

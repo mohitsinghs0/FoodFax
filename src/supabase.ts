@@ -13,9 +13,8 @@ const supabaseAnonKey = (
   env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   ''
 ).trim();
-// NOTE: Service Role Key must NEVER be used in client-side code.
-// It is only read here for optional server-side admin client initialization.
-const supabaseServiceRoleKey = (env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY || '').trim();
+// NOTE: Service Role Key must NEVER be present or read in client-side code.
+// Client interacts exclusively via authenticated user JWT and anon key.
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
@@ -62,14 +61,8 @@ export const supabase = createClient(activeUrl, activeAnonKey, {
   },
 });
 
-export const supabaseAdmin = supabaseServiceRoleKey && supabaseUrl
-  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
-  : null;
+// Hardened Security: supabaseAdmin is strictly null in client build to prevent bundle credential leaks
+export const supabaseAdmin: any = null;
 
 /**
  * Validates connectivity to the Supabase backend.

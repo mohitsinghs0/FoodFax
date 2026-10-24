@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+.vercel
+

@@ -6,6 +6,8 @@ import { notificationService } from '../../services/notificationService';
 import { shopService } from '../../services/shopService';
 import { useAccessibility } from '../../context/AccessibilityContext';
 import { useRouter } from '../../context/RouterContext';
+import { useAuth } from '../../context/AuthContext';
+import { isCustomerAuthorizedForOrder, maskPhoneNumber } from '../../utils/orderValidation';
 import { 
   CheckCircle2, 
   Clock, 
@@ -24,6 +26,7 @@ import {
   Phone,
   QrCode,
   ShieldCheck,
+  ShieldAlert,
   Send,
   MessageSquare,
   Printer,
@@ -96,10 +99,12 @@ const STATUS_LEVELS: Record<OrderStatus, number> = {
 
 export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) => {
   const { navigate } = useRouter();
+  const { currentUser } = useAuth();
   const { highContrast, reducedMotion, announce } = useAccessibility();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showPickupPassModal, setShowPickupPassModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'timeline' | 'map' | 'receipt' | 'messages'>('timeline');
@@ -182,6 +187,15 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
         setLoading(false);
         return;
       }
+
+      // Customer Tenant Isolation: Verify viewer owns this order
+      if (!isCustomerAuthorizedForOrder(data, currentUser)) {
+        setIsUnauthorized(true);
+        setOrder(null);
+        setLoading(false);
+        return;
+      }
+      setIsUnauthorized(false);
 
       // Verify that the shop for this order still exists in the database
       const liveShop = await shopService.getShop(data.shopId);
@@ -371,6 +385,36 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
         <div className="h-28 bg-slate-200 rounded-2xl animate-pulse" />
         <div className="h-40 bg-slate-200 rounded-2xl animate-pulse" />
         <span className="sr-only">Loading live order tracking...</span>
+      </div>
+    );
+  }
+
+  if (isUnauthorized) {
+    return (
+      <div className="max-w-lg mx-auto p-8 text-center bg-white rounded-3xl border border-amber-200/90 shadow-sm mt-4 space-y-4">
+        <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-black text-slate-900">Protected Order Token</h2>
+          <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+            This live order token belongs to another customer account. For security and privacy, you can only track orders placed in your session or registered account.
+          </p>
+        </div>
+        <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
+          <button
+            onClick={() => navigate('/orders')}
+            className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+          >
+            View Your Orders
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+          >
+            Back to Home
+          </button>
+        </div>
       </div>
     );
   }

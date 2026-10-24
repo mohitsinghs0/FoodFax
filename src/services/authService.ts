@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin, isSupabaseConfigured } from '../supabase';
+import { supabase, isSupabaseConfigured } from '../supabase';
 import { AuthUser, OwnerBusinessContext, Shop, UserRole } from '../types';
 import { shopService } from './shopService';
 import { menuService } from './menuService';
@@ -984,60 +984,28 @@ class AuthService {
 
     let uid = `c_${Date.now()}_${last10.slice(-6)}`;
 
-    // 1. Sign up user via Supabase Auth (prefer admin for instant confirmation)
-    let authSucceeded = false;
-    if (supabaseAdmin) {
-      try {
-        const { data: adminData, error: adminErr } = await supabaseAdmin.auth.admin.createUser({
-          email: emailToUse,
-          password: password,
-          email_confirm: true,
-          user_metadata: {
+    // 1. Sign up user via standard authenticated client Supabase Auth
+    try {
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: emailToUse,
+        password: password,
+        options: {
+          data: {
             full_name: fullName,
             phone: formattedPhone,
             role: 'customer',
             photo_url: data.photoUrl || null,
           },
-        });
-        if (adminData?.user?.id) {
-          uid = adminData.user.id;
-          authSucceeded = true;
-        } else if (adminErr && adminErr.message?.includes('already been registered')) {
-          const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
-          const existing = listData?.users?.find((u) => u.email?.toLowerCase() === emailToUse.toLowerCase());
-          if (existing) {
-            uid = existing.id;
-            authSucceeded = true;
-          }
-        }
-      } catch (adminEx) {
-        console.warn('[AuthService] Admin createUser notice:', adminEx);
-      }
-    }
+        },
+      });
 
-    if (!authSucceeded) {
-      try {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: emailToUse,
-          password: password,
-          options: {
-            data: {
-              full_name: fullName,
-              phone: formattedPhone,
-              role: 'customer',
-              photo_url: data.photoUrl || null,
-            },
-          },
-        });
-
-        if (signUpData?.user?.id) {
-          uid = signUpData.user.id;
-        } else if (signUpError && !signUpError.message.includes('already registered')) {
-          console.warn('[AuthService] Supabase signUp note:', signUpError.message);
-        }
-      } catch (e: any) {
-        console.warn('[AuthService] Supabase Auth signUp exception:', e?.message);
+      if (signUpData?.user?.id) {
+        uid = signUpData.user.id;
+      } else if (signUpError && !signUpError.message.includes('already registered')) {
+        console.warn('[AuthService] Supabase signUp note:', signUpError.message);
       }
+    } catch (e: any) {
+      console.warn('[AuthService] Supabase Auth signUp exception:', e?.message);
     }
 
     // Try signing in immediately to establish active auth session

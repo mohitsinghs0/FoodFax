@@ -3,7 +3,7 @@ import { INITIAL_ORDERS } from '../data/mockData';
 import { firestoreSync, normalizeOrderDoc, onDatabaseOrderCommitted, MOCK_SHOP_IDS } from './firestoreSyncService';
 import { notificationService } from './notificationService';
 import { shopService } from './shopService';
-import { assertValidOrderSubmission } from '../utils/orderValidation';
+import { assertValidOrderSubmission, validateOrderStateTransition } from '../utils/orderValidation';
 import { isSupabaseConfigured } from '../supabase';
 
 const ORDERS_STORAGE_KEY = 'foodflow_customer_orders';
@@ -823,6 +823,13 @@ export const orderService = {
       }
     } else {
       orderToUpdate = orders[index];
+    }
+
+    // Enforce strict order fulfillment state machine transition
+    const transitionCheck = validateOrderStateTransition(orderToUpdate.orderStatus, status);
+    if (!transitionCheck.valid) {
+      console.warn(`[OrderService] Illegal state transition blocked: ${transitionCheck.error}`);
+      throw new Error(transitionCheck.error);
     }
 
     const order = { ...orderToUpdate, orderStatus: status, updatedAt: new Date().toISOString() };

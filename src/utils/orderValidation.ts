@@ -141,3 +141,118 @@ export function validateUpiUtr(rawUtr: string): {
   return { valid: true, cleaned };
 }
 
+/**
+ * Validates sequential order fulfillment state transitions.
+ * Allowed sequence: PENDING -> ACCEPTED -> PREPARING -> READY -> COMPLETED.
+ * Cancellations/Rejections allowed from PENDING, ACCEPTED, or PREPARING.
+ * Disallows invalid jumps (e.g., PENDING directly to COMPLETED).
+ */
+export const VALID_ORDER_TRANSITIONS: Record<string, string[]> = {
+  PENDING: ['ACCEPTED', 'CANCELLED', 'REJECTED'],
+  ACCEPTED: ['PREPARING', 'CANCELLED', 'REJECTED'],
+  PREPARING: ['READY', 'CANCELLED'],
+  READY: ['COMPLETED'],
+  COMPLETED: [],
+  CANCELLED: [],
+  REJECTED: [],
+};
+
+export function validateOrderStateTransition(
+  currentStatus: string,
+  newStatus: string
+): { valid: boolean; error?: string } {
+  const current = String(currentStatus || '').toUpperCase();
+  const next = String(newStatus || '').toUpperCase();
+
+  if (current === next) {
+    return { valid: true };
+  }
+
+  const allowed = VALID_ORDER_TRANSITIONS[current] || [];
+  if (!allowed.includes(next)) {
+    return {
+      valid: false,
+      error: `Invalid state transition from ${current} to ${next}. Allowed next states: ${
+        allowed.length > 0 ? allowed.join(', ') : 'None (Terminal state)'
+      }.`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Sanitizes input text: strips HTML tags, script injections, and excessive whitespace.
+ */
+export function sanitizeTextInput(input: string | undefined | null, maxLength = 250): string {
+  if (!input) return '';
+  const noHtml = String(input)
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]*>?/gm, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+=/gi, '')
+    .trim();
+  return noHtml.slice(0, maxLength);
+}
+
+/**
+ * Masks customer phone number for display (e.g. +91 95551 *****) to preserve PII privacy.
+ */
+export function maskPhoneNumber(phone: string | undefined | null): string {
+  if (!phone) return '';
+  const clean = phone.replace(/[^\d+]/g, '');
+  if (clean.length < 8) return '****';
+  const prefix = clean.slice(0, clean.length - 5);
+  return `${prefix}*****`;
+}
+
+/**
+ * Customer session order authorization tracker (prevents IDOR on /order/:id)
+ */
+const RECENT_ORDERS_KEY = 'foodfax_my_order_ids';
+
+export function recordPlacedOrder(orderId: string): void {
+  if (typeof window === 'undefined' || !orderId) return;
+  try {
+    const raw = localStorage.getItem(RECENT_ORDERS_KEY);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    if (!ids.includes(orderId)) {
+      ids.unshift(orderId);
+      localStorage.setItem(RECENT_ORDERS_KEY, JSON.stringify(ids.slice(0, 50)));
+    }
+  } catch {}
+}
+
+export function isCustomerAuthorizedForOrder(
+  order: { id: string; customerId?: string; customerPhone?: string },
+  currentUser: { id?: string; phone?: string; role?: string } | null
+): boolean {
+  if (!order) return false;
+  // Admins always have access
+  if (currentUser?.role === 'admin') return true;
+
+  // Direct user ID match
+  if (currentUser?.id && order.customerId && currentUser.id === order.customerId) {
+    return true;
+  }
+
+  // Clean phone number match
+  if (currentUser?.phone && order.customerPhone) {
+    const uPhone = currentUser.phone.replace(/\D/g, '').slice(-10);
+    const oPhone = order.customerPhone.replace(/\D/g, '').slice(-10);
+    if (uPhone && uPhone === oPhone) return true;
+  }
+
+  // Placed on this device/browser in active customer session
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(RECENT_ORDERS_KEY);
+      const ids: string[] = raw ? JSON.parse(raw) : [];
+      if (ids.includes(order.id)) return true;
+    } catch {}
+  }
+
+  return false;
+}
+

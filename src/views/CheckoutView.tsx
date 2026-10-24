@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import { shopService } from '../services/shopService';
 import { paymentService } from '../services/paymentService';
 import { orderService } from '../services/orderService';
+import { recordPlacedOrder } from '../utils/orderValidation';
 import { OrderType, PaymentMethod, Shop, UPIQRPayCreateResponse } from '../types';
 import { 
   ArrowLeft, 
@@ -308,6 +309,7 @@ export const CheckoutView: React.FC = () => {
           instructions: instructions.trim() || undefined,
         });
 
+        recordPlacedOrder(newOrder.id);
         navigate(`/order/${newOrder.id}`);
       } catch (err: any) {
         console.error('Failed to place counter order:', err);
@@ -417,6 +419,7 @@ export const CheckoutView: React.FC = () => {
 
       setTimeout(() => {
         setIsPaymentModalOpen(false);
+        recordPlacedOrder(newOrder.id);
         navigate(`/order/${newOrder.id}`);
       }, 1400);
     } catch (err: any) {
