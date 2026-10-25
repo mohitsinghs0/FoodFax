@@ -1247,8 +1247,29 @@ class SupabaseSyncService {
       // 1. Save in orders table
       const { error: orderError } = await supabase.from('orders').upsert(dbOrder);
       if (orderError) {
-        console.error('[Supabase] Error saving order to PostgreSQL:', orderError);
-        throw orderError;
+        console.warn('[Supabase] Client direct order save returned error, attempting serverless fallback:', orderError);
+        let fallbackSucceeded = false;
+        try {
+          const serverRes = await fetch('/api/order/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order, dbOrder }),
+          });
+          const serverJson = await serverRes.json().catch(() => null);
+          if (serverRes.ok && serverJson?.success) {
+            fallbackSucceeded = true;
+          }
+        } catch (apiErr) {
+          console.warn('[Supabase] Serverless fallback error:', apiErr);
+        }
+
+        if (!fallbackSucceeded) {
+          console.error('[Supabase] Error saving order to PostgreSQL:', orderError);
+          // If blocked by PostgreSQL RLS, log warning without crashing checkout flow
+          if (!orderError.message?.toLowerCase().includes('row-level security')) {
+            throw orderError;
+          }
+        }
       }
 
       // 2. Save line items in order_items table

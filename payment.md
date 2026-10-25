@@ -50,21 +50,19 @@ FoodFax uses a **Centralized Platform Merchant Collection Model** designed speci
 
 ## 3. Order Placement & Payment State Machine
 
-FoodFax implement karta hai ek **Fail-Safe Atomic State Machine**:
+FoodFax implement karta hai ek **Strict Post-Payment Verification Atomic State Machine**:
 
 ```mermaid
 stateDiagram-v2
     [*] --> CartCheckout: Customer reviews cart
-    CartCheckout --> OrderCreatedPending: Clicks "Pay Online via UPI"
+    CartCheckout --> AwaitingPayment: Clicks "Pay Online via UPI"
     
-    note right of OrderCreatedPending
-      1. public.orders me row INSERT (status: PENDING)
-      2. Daily Token (#101, #102) transactional generate
-      3. Cart cleared & session recorded
-      4. Modal opens INSTANTLY in 0ms
+    note right of AwaitingPayment
+      1. Zero phantom database writes
+      2. Cart remains intact & preserved
+      3. No token burned before payment
+      4. Modal opens INSTANTLY in 0ms with QR & GPay deep links
     end note
-
-    OrderCreatedPending --> AwaitingPayment: Dynamic QR + Deep Links displayed
 
     state AwaitingPayment {
         [*] --> PollingStatus
@@ -72,27 +70,35 @@ stateDiagram-v2
         [*] --> WebhookListen: Realtime postgres_changes
     }
 
-    AwaitingPayment --> OrderPaid: 1. Webhook receives payment.success
-    AwaitingPayment --> OrderPaid: 2. Status poll returns PAID
-    AwaitingPayment --> OrderPaid: 3. User taps "I Have Paid" & bank confirmed
-    AwaitingPayment --> OrderPaid: 4. User enters valid 12-digit UTR
+    AwaitingPayment --> OrderCommitted: 1. Webhook receives payment.success
+    AwaitingPayment --> OrderCommitted: 2. Status poll returns PAID
+    AwaitingPayment --> OrderCommitted: 3. User taps "I Have Paid" & bank confirmed
+    AwaitingPayment --> OrderCommitted: 4. User enters valid 12-digit UTR
 
-    OrderPaid --> LiveOrderTracker: Green Tick (1.2s) -> Redirect to /#/order/:id
+    note right of OrderCommitted
+      1. Transactional Daily Token (#101) generated ONCE
+      2. Order committed to public.orders with status PAID & UTR
+      3. Cart cleared
+      4. Live order tracker starts
+    end note
+
+    OrderCommitted --> LiveOrderTracker: Green Tick (1.2s) -> Redirect to /#/order/:id
     AwaitingPayment --> OrderExpired: 5-minute countdown runs out (300s)
-    OrderExpired --> CartCheckout: Customer regenerates fresh QR
+    OrderExpired --> CartCheckout: Customer regenerates fresh QR or selects Cash
 ```
 
 ### State Breakdown:
-1. **Pre-Commitment as `PENDING`:** Jab customer "Pay Online via UPI" click karta hai, modal khulne se pehle `orderService.createOrder` execute hota hai:
-   - Order status: `'PENDING'`
-   - Payment status: `'PENDING'`
-   - Daily Token: Sequential atomic number (e.g., `#101`)
-   - Order items snapshot save hoti hai
+1. **Zero Premature Commitment (No Phantom Tokens):** Jab customer "Pay Online via UPI" click karta hai, cart items ki snapshot banayi jaati hai aur instant modal khulta hai. **Database me order row insert nahi hoti aur token (#101, #102) burn nahi hota** jab tak payment confirm na ho jaye. Isse bar-bar click karne par tokens waste hona band ho gaya hai.
 2. **Instant QR Render (0ms Latency):** UI kisi slow remote gateway ka wait nahi karta. High-res standard UPI QR immediately render hota hai jo customer ke scanner par direct `Mohit Santosh Singh` show karta hai.
 3. **Triple Verification Redundancy:**
    - **Method A (Webhook):** UPIQRPay / BharatPe webhook `/api/payment/webhook` par notification bhejta hai.
    - **Method B (Automated 2s Polling):** `/api/payment/status?payment_id=:id` background me poll hota hai.
    - **Method C (Manual UTR Fallback):** Agar bank SMS late ho ya internet slow ho, customer apne GPay/PhonePe se 12-digit UPI UTR (`429618392014`) enter karke instantly order confirm kar sakta hai.
+4. **Order Commitment on Verified Payment:** Jaise hi payment verify hoti hai:
+   - Single sequential token assign hota hai.
+   - Order `public.orders` me `payment_status: 'PAID'` aur `utrNumber` ke saath save hota hai (with serverless fallback `/api/order/create` if client RLS blocks direct anon writes).
+   - Cart clear hoti hai aur customer [Live Order Tracker (`/#/order/:orderId`)](file:///Users/mohitsingh/Documents/GitHub/foodfax/src/views/OrderTrackerView.tsx) par redirect hota hai.
+5. **Active Order Banner Integrity:** Header me active order tracking banner sirf tab dikhta hai jab order ka `paymentStatus === 'PAID'` ho ya order `CASH_AT_COUNTER` ho. Unpaid payment attempts banner me show nahi hote.
 
 ---
 

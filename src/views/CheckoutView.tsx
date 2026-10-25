@@ -309,8 +309,69 @@ export const CheckoutView: React.FC = () => {
     }
 
     // IF PAY ONLINE (Central Platform Merchant & UPI Gateway):
-    setIsSubmitting(true);
-    let orderRef = '';
+    // 1. DO NOT commit or save the order yet! Cart remains intact until payment is verified.
+    const tempTxnRef = `ord-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    setPendingOrderId(tempTxnRef);
+    isCommittingRef.current = false;
+    setPaymentStatus('WAITING');
+    setPaymentUtr(null);
+    setErrorMessage(null);
+
+    // 2. Central Platform Merchant Policy: Mohit Santosh Singh (BharatPe UPI ID)
+    const targetUpiId = (shopDetails?.enableDirectMerchant && shopDetails?.upiId)
+      ? shopDetails.upiId
+      : PLATFORM_UPI_ID;
+    const targetShopName = (shopDetails?.enableDirectMerchant && shopDetails?.name)
+      ? shopDetails.name
+      : PLATFORM_MERCHANT_NAME;
+    const orderNote = `FoodFax Order ${tempTxnRef}`;
+    const formattedAmount = (grandTotal || 0).toFixed(2);
+    const instantUpiLink = `upi://pay?pa=${encodeURIComponent(targetUpiId)}&pn=${encodeURIComponent(targetShopName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(orderNote)}&tr=${encodeURIComponent(tempTxnRef)}`;
+    const instantQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(instantUpiLink)}`;
+
+    // 3. Open modal INSTANTLY (0ms delay) with exact order amount
+    setUpiData({
+      paymentId: tempTxnRef,
+      orderId: tempTxnRef,
+      amount: grandTotal,
+      qrCode: instantQrCode,
+      upiLink: instantUpiLink,
+      payUrl: instantUpiLink,
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      status: 'pending',
+    });
+    setIsPaymentModalOpen(true);
+    setIsSubmitting(false);
+
+    // 4. Background registration with UPIQRPay for automatic webhook / polling settlement
+    paymentService.createUpiOrder({
+      orderId: tempTxnRef,
+      customerPhone: customerPhone.trim(),
+      customerName: customerName.trim(),
+      amount: grandTotal,
+      shopId: effectiveShopId,
+    }).then((upiResult) => {
+      if (upiResult.success && upiResult.data) {
+        setUpiData((prev) => ({
+          ...prev!,
+          ...upiResult.data,
+          // Strictly enforce original cart amount (prevent arbitrary paise override)
+          amount: grandTotal,
+        }));
+      }
+    }).catch(() => {});
+  };
+
+  /**
+   * Called automatically when UPIQRPay gateway confirms payment via bank status/webhook
+   */
+  const handleGatewayConfirmedPayment = async (utrString: string) => {
+    if (isCommittingRef.current) return;
+    isCommittingRef.current = true;
+    setIsVerifying(true);
+    setPaymentStatus('PAID');
+    setPaymentUtr(utrString);
+
     try {
       const sourceItems = items && items.length > 0 ? items : cartItemsSnapshotRef.current;
       const orderItems = sourceItems.map(({ menuItem, quantity }) => ({
@@ -324,9 +385,11 @@ export const CheckoutView: React.FC = () => {
 
       const orderSubtotal = orderItems.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0);
       const orderTotal = grandTotal || orderSubtotal;
+      const effectiveShopId = shopDetails?.id || shopId!;
 
-      // 1. Immediately commit order as PENDING so it is permanently tracked with its token
+      // NOW AND ONLY NOW: Commit the verified order and clear the cart!
       const newOrder = await commitOrderAndClearCart({
+        id: pendingOrderId || undefined,
         shopId: effectiveShopId,
         shopName: shopName || shopDetails?.name || 'Food Stall',
         shopImage: shopImage || shopDetails?.image || undefined,
@@ -337,7 +400,8 @@ export const CheckoutView: React.FC = () => {
         orderType,
         tableNumber: orderType === 'DINE_IN' ? tableNumber.trim() : undefined,
         paymentMethod: 'PAY_ONLINE',
-        paymentStatus: 'PENDING',
+        paymentStatus: 'PAID',
+        utrNumber: utrString,
         items: orderItems,
         subtotal: orderSubtotal,
         total: orderTotal,
@@ -345,89 +409,19 @@ export const CheckoutView: React.FC = () => {
         instructions: instructions.trim() || undefined,
       });
 
-      orderRef = newOrder.id;
-      recordPlacedOrder(orderRef);
-      setPendingOrderId(orderRef);
-      isCommittingRef.current = false;
-      setPaymentStatus('WAITING');
-      setPaymentUtr(null);
+      recordPlacedOrder(newOrder.id);
 
-      // 2. Central Platform Merchant Policy: Mohit Santosh Singh (BharatPe UPI ID)
-      const targetUpiId = (shopDetails?.enableDirectMerchant && shopDetails?.upiId)
-        ? shopDetails.upiId
-        : PLATFORM_UPI_ID;
-      const targetShopName = (shopDetails?.enableDirectMerchant && shopDetails?.name)
-        ? shopDetails.name
-        : PLATFORM_MERCHANT_NAME;
-      const orderNote = `FoodFax Order ${orderRef}`;
-      const formattedAmount = (grandTotal || 0).toFixed(2);
-      const instantUpiLink = `upi://pay?pa=${encodeURIComponent(targetUpiId)}&pn=${encodeURIComponent(targetShopName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(orderNote)}&tr=${encodeURIComponent(orderRef)}`;
-      const instantQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(instantUpiLink)}`;
-
-      // 3. Open modal INSTANTLY in 0ms with exact order amount
-      setUpiData({
-        paymentId: orderRef,
-        orderId: orderRef,
-        amount: grandTotal,
-        qrCode: instantQrCode,
-        upiLink: instantUpiLink,
-        payUrl: instantUpiLink,
-        expiresAt: new Date(Date.now() + 300000).toISOString(),
-        status: 'pending',
-      });
-      setIsPaymentModalOpen(true);
-
-      // 4. Background registration with UPIQRPay for automatic webhook settlement
-      paymentService.createUpiOrder({
-        orderId: orderRef,
-        customerPhone: customerPhone.trim(),
-        customerName: customerName.trim(),
-        amount: grandTotal,
-        shopId: effectiveShopId,
-      }).then((upiResult) => {
-        if (upiResult.success && upiResult.data) {
-          setUpiData((prev) => ({
-            ...prev!,
-            ...upiResult.data,
-            // Strictly enforce original cart amount (prevent arbitrary paise override)
-            amount: grandTotal,
-          }));
-        }
-      }).catch(() => {});
+      setTimeout(() => {
+        setIsPaymentModalOpen(false);
+        navigate(`/order/${newOrder.id}`);
+      }, 1400);
     } catch (err: any) {
-      console.error('Failed to initialize online order:', err);
-      setErrorMessage(err?.message || 'Could not initialize order. Please try again.');
+      console.error('Error committing gateway verified order:', err);
+      isCommittingRef.current = false;
+      setErrorMessage(err?.message || 'Error confirming order. Please contact counter staff.');
     } finally {
-      setIsSubmitting(false);
+      setIsVerifying(false);
     }
-  };
-
-  /**
-   * Called automatically when UPIQRPay gateway confirms payment via bank status/webhook
-   */
-  const handleGatewayConfirmedPayment = async (utrString: string) => {
-    if (isCommittingRef.current) return;
-    isCommittingRef.current = true;
-    setIsVerifying(true);
-    setPaymentStatus('PAID');
-    setPaymentUtr(utrString);
-
-    const targetOrderId = pendingOrderId;
-    if (targetOrderId) {
-      try {
-        await orderService.markPaymentPaid(targetOrderId, utrString);
-        recordPlacedOrder(targetOrderId);
-      } catch (err) {
-        console.warn('[CheckoutView] markPaymentPaid background error:', err);
-      }
-    }
-
-    setTimeout(() => {
-      setIsPaymentModalOpen(false);
-      if (targetOrderId) {
-        navigate(`/order/${targetOrderId}`);
-      }
-    }, 1400);
   };
 
   /**

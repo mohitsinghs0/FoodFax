@@ -159,7 +159,11 @@ export const orderService = {
     }
 
     const localOrders = this.getStoredOrders().filter(
-      (o) => o.customerId === effectiveCustomerId && this.isOrderValidAndFromLiveShop(o, validShopIds)
+      (o) =>
+        o.customerId === effectiveCustomerId &&
+        this.isOrderValidAndFromLiveShop(o, validShopIds) &&
+        // Never treat unconfirmed/unpaid online payment attempts as valid customer orders
+        !(o.paymentMethod === 'PAY_ONLINE' && o.paymentStatus === 'PENDING')
     );
 
     const orderMap = new Map<string, Order>();

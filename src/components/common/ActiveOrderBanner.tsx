@@ -47,10 +47,12 @@ export const ActiveOrderBanner: React.FC = () => {
       const orders = await orderService.getCustomerOrders(currentUser?.id);
       const active = orders.find(
         (o) =>
-          o.orderStatus === 'PENDING' ||
-          o.orderStatus === 'ACCEPTED' ||
-          o.orderStatus === 'PREPARING' ||
-          o.orderStatus === 'READY'
+          // Only show banner for confirmed orders (paid online OR cash at counter)
+          (o.paymentStatus === 'PAID' || o.paymentMethod === 'CASH_AT_COUNTER') &&
+          (o.orderStatus === 'PENDING' ||
+           o.orderStatus === 'ACCEPTED' ||
+           o.orderStatus === 'PREPARING' ||
+           o.orderStatus === 'READY')
       );
 
       if (active) {
@@ -58,10 +60,11 @@ export const ActiveOrderBanner: React.FC = () => {
         setUnreviewedCompletedOrder(null);
         unsub = orderRealtimeService.subscribeToOrder(active.id, (updated) => {
           if (
-            updated.orderStatus === 'PENDING' ||
-            updated.orderStatus === 'ACCEPTED' ||
-            updated.orderStatus === 'PREPARING' ||
-            updated.orderStatus === 'READY'
+            (updated.paymentStatus === 'PAID' || updated.paymentMethod === 'CASH_AT_COUNTER') &&
+            (updated.orderStatus === 'PENDING' ||
+             updated.orderStatus === 'ACCEPTED' ||
+             updated.orderStatus === 'PREPARING' ||
+             updated.orderStatus === 'READY')
           ) {
             setActiveOrder(updated);
             if (updated.orderStatus === 'READY') {
