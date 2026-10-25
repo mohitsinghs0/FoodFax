@@ -70,12 +70,39 @@ export default async function handler(
     }
 
     const supabase = getSupabaseServer();
+
+    // 1. Direct check in orders table (fastest & most reliable)
+    let orderRecord: any = null;
+    try {
+      const { data } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', paymentId)
+        .maybeSingle();
+      orderRecord = data;
+    } catch {}
+
+    if (orderRecord && orderRecord.payment_status === 'PAID') {
+      sendJson(res, 200, {
+        success: true,
+        data: {
+          payment_id: paymentId,
+          order_id: orderRecord.id,
+          status: 'PAID',
+          utr_number: orderRecord.utr_number || orderRecord.id,
+          paid_at: orderRecord.updated_at,
+        },
+      });
+      return;
+    }
+
+    // 2. Direct check in payments table
     let paymentRecord: any = null;
     try {
       const { data } = await supabase
         .from('payments')
         .select('*')
-        .eq('provider_payment_id', paymentId)
+        .or(`id.eq.pay-${paymentId},order_id.eq.${paymentId},transaction_id.eq.${paymentId}`)
         .maybeSingle();
       paymentRecord = data;
     } catch {}
@@ -87,7 +114,7 @@ export default async function handler(
           payment_id: paymentId,
           order_id: paymentRecord.order_id,
           status: 'PAID',
-          utr_number: paymentRecord.utr_number || paymentRecord.transaction_id || paymentId,
+          utr_number: paymentRecord.transaction_id || paymentId,
           paid_at: paymentRecord.paid_at,
         },
       });
@@ -136,12 +163,11 @@ export default async function handler(
               .from('payments')
               .update({
                 payment_status: 'PAID',
-                utr_number: verifiedUtr,
                 transaction_id: verifiedUtr,
                 paid_at: upiData.data.paid_at || new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               })
-              .eq('provider_payment_id', paymentId);
+              .eq('order_id', orderId);
 
             await supabase
               .from('orders')

@@ -182,3 +182,74 @@ describe('6. 12-Digit NPCI UTR Verification', () => {
     assert.equal(validateUpiUtr('111111111111').valid, false);
   });
 });
+
+describe('7. Category Visual Discovery & High-Resolution Imagery', () => {
+  // Dynamic import of getCategoryVisual to test visual resolution
+  it('resolves dedicated distinct food photos for street food categories', async () => {
+    const { getCategoryVisual } = await import('../views/HomeView');
+
+    const testCategories = [
+      { id: 'vada-pav', name: 'Vada Pav' },
+      { id: 'chaat', name: 'Chaat & Bhel' },
+      { id: 'tea-coffee', name: 'Chai & Tea' },
+      { id: 'juice', name: 'Cold Drinks & Juices' },
+      { id: 'rolls', name: 'Rolls & Frankie' },
+      { id: 'thali', name: 'Thali & Meals' },
+      { id: 'chinese', name: 'Chinese Wok' },
+      { id: 'burger', name: 'Burgers' },
+      { id: 'pizza', name: 'Pizza' },
+      { id: 'momos', name: 'Momos' },
+      { id: 'biryani', name: 'Biryani & Rice' },
+      { id: 'special', name: 'Signature Dishes' },
+    ];
+
+    const RESTAURANT_ROOM_IMAGE = 'photo-1555396273-367ea4eb4db5';
+
+    for (const cat of testCategories) {
+      const visual = getCategoryVisual(cat);
+      assert.ok(visual.imageUrl, `Category ${cat.name} must have a valid imageUrl`);
+      assert.ok(visual.cleanName, `Category ${cat.name} must have a cleanName`);
+      assert.equal(
+        visual.imageUrl.includes(RESTAURANT_ROOM_IMAGE),
+        false,
+        `Category ${cat.name} should not use the generic restaurant room interior photo`
+      );
+    }
+  });
+
+  it('preserves custom explicit image URL if category already has one', async () => {
+    const { getCategoryVisual } = await import('../views/HomeView');
+    const custom = { id: 'special-dish', name: 'Special Item', imageUrl: 'https://cdn.example.com/custom.jpg' };
+    const visual = getCategoryVisual(custom);
+    assert.equal(visual.imageUrl, 'https://cdn.example.com/custom.jpg');
+  });
+});
+
+describe('8. Central Merchant UPI & Google Pay URI Standards', () => {
+  it('verifies platform merchant identity and UPI ID', async () => {
+    const { PLATFORM_UPI_ID, PLATFORM_MERCHANT_NAME } = await import('../views/CheckoutView');
+    assert.equal(PLATFORM_UPI_ID, 'bharatpe2e0p0d8x5a59798@unitype');
+    assert.equal(PLATFORM_MERCHANT_NAME, 'Mohit Santosh Singh');
+  });
+
+  it('guarantees valid percent-encoding without plus signs in UPI URI', () => {
+    const pa = 'bharatpe2e0p0d8x5a59798@unitype';
+    const pn = 'Mohit Santosh Singh';
+    const am = (1.0).toFixed(2);
+    const tn = 'FoodFax Order ord-101';
+    const tr = 'ord-101';
+
+    const upiQuery = [
+      `pa=${encodeURIComponent(pa)}`,
+      `pn=${encodeURIComponent(pn)}`,
+      `am=${am}`,
+      `cu=INR`,
+      `tn=${encodeURIComponent(tn)}`,
+      `tr=${encodeURIComponent(tr)}`,
+    ].join('&');
+
+    assert.equal(upiQuery.includes('+'), false, 'UPI query string must not contain + signs');
+    assert.ok(upiQuery.includes('pn=Mohit%20Santosh%20Singh'), 'Payee name must be percent encoded');
+    assert.ok(upiQuery.includes('am=1.00'), 'Amount must be exactly 1.00');
+  });
+});

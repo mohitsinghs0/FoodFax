@@ -48,23 +48,39 @@ interface HomeViewProps {
 }
 
 // Curated high-res imagery for food categories (matching street food platforms)
-export function getCategoryVisual(category: { id?: string; name?: string }): {
+export function getCategoryVisual(category: { id?: string; name?: string; image?: string; imageUrl?: string }): {
   imageUrl: string;
   cleanName: string;
 } {
+  // If category already has an explicit custom image from database, use it
+  if (category.imageUrl && category.imageUrl.trim() !== '') {
+    return { imageUrl: category.imageUrl, cleanName: category.name || 'Food Category' };
+  }
+  if (category.image && category.image.trim() !== '') {
+    return { imageUrl: category.image, cleanName: category.name || 'Food Category' };
+  }
+
   const idStr = String(category.id || '').toLowerCase();
   const nameStr = String(category.name || '').toLowerCase();
   const combined = `${idStr} ${nameStr}`;
 
-  // 1. South Indian / Dosa / Idli
-  if (combined.includes('south') || combined.includes('dosa') || combined.includes('idli')) {
+  // 1. Signature / Chef's Specials
+  if (combined.includes('signat') || combined.includes('special') || combined.includes('chef')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Signature Specials',
+    };
+  }
+
+  // 2. South Indian / Dosa / Idli / Uttapam
+  if (combined.includes('south') || combined.includes('dosa') || combined.includes('idli') || combined.includes('uttapam') || combined.includes('sambar')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=300&q=80',
       cleanName: 'South Indian',
     };
   }
 
-  // 2. Vada Pav
+  // 3. Vada Pav / Batata Vada
   if (combined.includes('vada') || combined.includes('batata')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
@@ -72,63 +88,63 @@ export function getCategoryVisual(category: { id?: string; name?: string }): {
     };
   }
 
-  // 3. Chaat / Sev Puri / Pani Puri / Bhel
+  // 4. Chaat / Sev Puri / Pani Puri / Bhel
   if (combined.includes('chaat') || combined.includes('pani puri') || combined.includes('sev puri') || combined.includes('bhel')) {
     return {
-      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
-      cleanName: 'Chaat',
+      imageUrl: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Chaat & Bhel',
     };
   }
 
-  // 4. Chai & Hot Beverages / Tea / Coffee
-  if (combined.includes('chai') || combined.includes('tea') || combined.includes('coffee')) {
+  // 5. Chai & Hot Beverages / Tea / Coffee
+  if (combined.includes('chai') || combined.includes('tea') || combined.includes('coffee') || combined.includes('kadak')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=300&q=80',
       cleanName: 'Chai & Tea',
     };
   }
 
-  // 5. Refreshing Drinks / Cold Beverages / Juices / Shakes
-  if (combined.includes('refresh') || combined.includes('drink') || combined.includes('juice') || combined.includes('beverage')) {
+  // 6. Refreshing Drinks / Cold Beverages / Juices / Shakes / Coolers
+  if (combined.includes('refresh') || combined.includes('drink') || combined.includes('juice') || combined.includes('cooler') || (combined.includes('beverage') && !combined.includes('chai'))) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=300&q=80',
-      cleanName: 'Cold Drinks',
+      cleanName: 'Cold Drinks & Juices',
     };
   }
 
-  // 6. Rolls & Wraps / Frankie
+  // 7. Rolls & Wraps / Frankie
   if (combined.includes('roll') || combined.includes('frankie') || combined.includes('wrap')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=300&q=80',
-      cleanName: 'Rolls & Wraps',
+      cleanName: 'Rolls & Frankie',
     };
   }
 
-  // 7. Thali & Meals / Combos
-  if (combined.includes('thali') || combined.includes('meal')) {
+  // 8. Thali & Meals / Combos / Tiffin
+  if (combined.includes('thali') || combined.includes('meal') || combined.includes('tiffin')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=300&q=80',
       cleanName: 'Thali & Meals',
     };
   }
 
-  // 8. Desserts & Shakes / Sweets / Ice cream
-  if (combined.includes('dessert') || combined.includes('shake') || combined.includes('sweet') || combined.includes('kulfi') || combined.includes('ice cream')) {
+  // 9. Desserts & Shakes / Sweets / Ice cream / Kulfi / Falooda
+  if (combined.includes('dessert') || combined.includes('shake') || combined.includes('sweet') || combined.includes('kulfi') || combined.includes('falooda') || combined.includes('ice cream')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?auto=format&fit=crop&w=300&q=80',
-      cleanName: 'Desserts',
+      cleanName: 'Desserts & Sweets',
     };
   }
 
-  // 9. Chinese / Noodles / Manchurian
-  if (combined.includes('chinese') || combined.includes('noodle') || combined.includes('manchurian') || combined.includes('wok')) {
+  // 10. Chinese / Noodles / Manchurian / Wok
+  if (combined.includes('chinese') || combined.includes('noodle') || combined.includes('manchurian') || combined.includes('wok') || combined.includes('hakka')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=300&q=80',
-      cleanName: 'Chinese',
+      cleanName: 'Chinese Wok',
     };
   }
 
-  // 10. Burgers
+  // 11. Burgers
   if (combined.includes('burger')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=300&q=80',
@@ -136,7 +152,7 @@ export function getCategoryVisual(category: { id?: string; name?: string }): {
     };
   }
 
-  // 11. Sandwiches
+  // 12. Sandwiches / Toast
   if (combined.includes('sandwich') || combined.includes('toast')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=300&q=80',
@@ -144,7 +160,7 @@ export function getCategoryVisual(category: { id?: string; name?: string }): {
     };
   }
 
-  // 12. Pizza
+  // 13. Pizza
   if (combined.includes('pizza')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80',
@@ -152,7 +168,7 @@ export function getCategoryVisual(category: { id?: string; name?: string }): {
     };
   }
 
-  // 13. Momos
+  // 14. Momos / Dim Sum
   if (combined.includes('momo') || combined.includes('dim sum')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=300&q=80',
@@ -160,15 +176,23 @@ export function getCategoryVisual(category: { id?: string; name?: string }): {
     };
   }
 
-  // 14. Snacks / Starters / Treats / Samosa
-  if (combined.includes('snack') || combined.includes('starter') || combined.includes('treat') || combined.includes('samosa') || combined.includes('kachori')) {
+  // 15. Biryani / Rice Dishes
+  if (combined.includes('biryani') || combined.includes('pulao') || combined.includes('rice')) {
     return {
-      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
-      cleanName: combined.includes('treat') ? 'Snacks & Treats' : 'Snacks',
+      imageUrl: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Biryani & Rice',
     };
   }
 
-  // 15. Fast Food / Pav Bhaji
+  // 16. Breakfast / Poha / Upma
+  if (combined.includes('breakfast') || combined.includes('poha') || combined.includes('upma') || combined.includes('morning')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Breakfast',
+    };
+  }
+
+  // 17. Fast Food / Pav Bhaji
   if (combined.includes('fast') || combined.includes('pav bhaji')) {
     return {
       imageUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=300&q=80',
@@ -176,9 +200,17 @@ export function getCategoryVisual(category: { id?: string; name?: string }): {
     };
   }
 
-  // Default: Authentic street food plate
+  // 18. Snacks / Samosa / Kachori / Starters
+  if (combined.includes('snack') || combined.includes('starter') || combined.includes('treat') || combined.includes('samosa') || combined.includes('kachori')) {
+    return {
+      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=300&q=80',
+      cleanName: 'Snacks & Samosa',
+    };
+  }
+
+  // Default: Authentic street food plate with crispy snacks
   return {
-    imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=300&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?auto=format&fit=crop&w=300&q=80',
     cleanName: category.name || 'Street Food',
   };
 }
@@ -402,25 +434,37 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
             seenNames.add(normalizedKey);
             uniqueCats.push({
               ...cat,
-              name: cat.name || visual.cleanName,
+              name: visual.cleanName,
             });
           }
         }
 
         // Add staple categories if not already represented in database categories
         const staples = [
+          { id: 'vada-pav', name: 'Vada Pav', iconName: 'Flame', description: 'Crispy Mumbai vada pav' },
+          { id: 'chaat', name: 'Chaat & Bhel', iconName: 'Sparkles', description: 'Sev puri, bhel & pani puri' },
+          { id: 'tea-coffee', name: 'Chai & Tea', iconName: 'Coffee', description: 'Kadak cutting chai & coffee' },
+          { id: 'rolls', name: 'Rolls & Frankie', iconName: 'Flame', description: 'Kathi rolls & frankies' },
+          { id: 'south-indian', name: 'South Indian', iconName: 'Utensils', description: 'Crispy dosa, idli & vada' },
+          { id: 'fast-food', name: 'Fast Food', iconName: 'Sparkles', description: 'Pav bhaji, noodles & rolls' },
           { id: 'pizza', name: 'Pizza', iconName: 'Flame', description: 'Cheese street pizzas' },
           { id: 'burger', name: 'Burgers', iconName: 'Store', description: 'Burgers & buns' },
+          { id: 'sandwich', name: 'Sandwiches', iconName: 'Layers', description: 'Grilled Bombay toast' },
           { id: 'momos', name: 'Momos', iconName: 'Sparkles', description: 'Steamed & fried momos' },
           { id: 'chinese', name: 'Chinese Wok', iconName: 'Utensils', description: 'Hakka noodles & Manchurian' },
           { id: 'thali', name: 'Thali & Meals', iconName: 'Store', description: 'Desi full meal combos' },
+          { id: 'dessert', name: 'Desserts & Sweets', iconName: 'Smile', description: 'Kulfi, gulab jamun & sweets' },
+          { id: 'juice', name: 'Cold Drinks & Juices', iconName: 'GlassWater', description: 'Fresh fruit juices & coolers' },
         ];
         staples.forEach((s) => {
           const visual = getCategoryVisual(s);
           const normalizedKey = visual.cleanName.toLowerCase().replace(/[^a-z]/g, '');
           if (!seenNames.has(normalizedKey)) {
             seenNames.add(normalizedKey);
-            uniqueCats.push(s as ShopCategory);
+            uniqueCats.push({
+              ...s,
+              name: visual.cleanName,
+            } as ShopCategory);
           }
         });
 

@@ -498,7 +498,7 @@ export const orderService = {
     return updatedOrder;
   },
 
-  async markPaymentPaid(orderId: string): Promise<Order | null> {
+  async markPaymentPaid(orderId: string, utrNumber?: string): Promise<Order | null> {
     const orders = this.getStoredOrders();
     let index = orders.findIndex((o) => o.id === orderId);
     let targetOrder: Order | null = null;
@@ -508,6 +508,7 @@ export const orderService = {
       targetOrder = {
         ...orders[index],
         paymentStatus: 'PAID' as const,
+        utrNumber: utrNumber || orders[index].utrNumber,
         updatedAt: now,
       };
       orders[index] = targetOrder;
@@ -518,6 +519,7 @@ export const orderService = {
         targetOrder = {
           ...remote,
           paymentStatus: 'PAID' as const,
+          utrNumber: utrNumber || remote.utrNumber,
           updatedAt: now,
         };
         this.saveOrders([targetOrder, ...orders]);

@@ -161,7 +161,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
       success: true,
       data: {
         payment_id: qrResult.payment_id,
-        amount: qrResult.amount || orderAmount,
+        amount: orderAmount, // Strict pricing integrity: never override with arbitrary paise
         order_id: qrResult.order_id || order_id,
         qr_code: qrResult.qr_code,
         upi_link: qrResult.upi_link,

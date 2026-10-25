@@ -91,25 +91,34 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
 
     if (status === 'success' || payload.event === 'payment.success') {
       const now = paid_at || new Date().toISOString();
-      await supabase.from('payments').upsert({
-        id: `pay-${order_id}`,
-        order_id,
-        payment_status: 'PAID',
-        transaction_id: utr_number || payment_id,
-        utr_number: utr_number || payment_id,
-        provider_payment_id: payment_id,
-        paid_at: now,
-        raw_payload: payload,
-        updated_at: new Date().toISOString(),
-      });
+      const verifiedUtr = utr_number || payment_id;
 
+      // Update orders table with PAID status
       await supabase
         .from('orders')
         .update({
           payment_status: 'PAID',
+          utr_number: verifiedUtr,
           updated_at: new Date().toISOString(),
         })
         .eq('id', order_id);
+
+      // Safe schema-compliant upsert in payments table
+      try {
+        await supabase.from('payments').upsert({
+          id: `pay-${order_id}`,
+          order_id,
+          payment_mode: 'PAY_ONLINE',
+          payment_status: 'PAID',
+          amount: Number(order?.total || payload.amount || 0),
+          transaction_id: verifiedUtr,
+          provider: 'upiqrpay',
+          paid_at: now,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (payErr) {
+        console.warn('[Webhook] Warning updating payments table:', payErr);
+      }
     }
 
     sendJson(res, 200, { success: true, message: 'Webhook processed successfully' });

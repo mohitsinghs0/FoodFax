@@ -185,7 +185,8 @@ export const CheckoutView: React.FC = () => {
 
   const activeQrCodeUrl = upiData?.qrCode || '';
   const activeUpiLink = upiData?.upiLink || '';
-  const payableAmount = upiData?.amount ? Number(upiData.amount) : grandTotal;
+  // STRICT PRICING INTEGRITY: Never alter customer price with random paise (1.01, 1.02, 1.03, 1.04)
+  const payableAmount = grandTotal;
 
   /**
    * Builds app-specific deep links for Google Pay, PhonePe, Paytm, or generic UPI.
@@ -194,46 +195,33 @@ export const CheckoutView: React.FC = () => {
    * transaction reference (tr) linked to the gateway order ID, and note (tn).
    */
   const getUpiAppHref = (app: 'gpay' | 'phonepe' | 'paytm' | 'bhim'): string => {
-    const baseLink = activeUpiLink;
-    if (!baseLink) return upiData?.payUrl || '#';
+    const formattedAmount = (grandTotal || 0).toFixed(2);
+    const txnRef = pendingOrderId || upiData?.orderId || `ord-${Date.now()}`;
+    const txnNote = `FoodFax Order ${txnRef}`;
+    const merchantPa = PLATFORM_UPI_ID;
+    const merchantPn = PLATFORM_MERCHANT_NAME;
+
+    // Standard percent-encoded query (%20 instead of +) so Google Pay / PhonePe parse cleanly
+    const upiQuery = [
+      `pa=${encodeURIComponent(merchantPa)}`,
+      `pn=${encodeURIComponent(merchantPn)}`,
+      `am=${formattedAmount}`,
+      `cu=INR`,
+      `tn=${encodeURIComponent(txnNote)}`,
+      `tr=${encodeURIComponent(txnRef)}`,
+    ].join('&');
 
     const isMobile =
       typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    if (!isMobile && upiData?.payUrl) {
+    if (!isMobile && upiData?.payUrl && upiData.payUrl !== '#') {
       return upiData.payUrl;
     }
 
-    const queryIdx = baseLink.indexOf('?');
-    const rawQuery = queryIdx !== -1 ? baseLink.slice(queryIdx + 1) : '';
-    const params = new URLSearchParams(rawQuery);
-    const merchantPa = params.get('pa') || PLATFORM_UPI_ID;
-    const merchantPn = (params.get('pn') || PLATFORM_MERCHANT_NAME).replace(/\+/g, ' ');
-
-    if (merchantPa) {
-      const formattedAmount = (Number(payableAmount || grandTotal) || 0).toFixed(2);
-      const txnRef = params.get('tr') || upiData?.orderId || pendingOrderId || '';
-      const txnNote = (params.get('tn') || `FoodFax Order ${pendingOrderId || upiData?.orderId || ''}`).replace(/\+/g, ' ');
-      const mc = params.get('mc') || '';
-
-      const upiParams = new URLSearchParams();
-      upiParams.set('pa', merchantPa);
-      upiParams.set('pn', merchantPn);
-      upiParams.set('am', formattedAmount);
-      upiParams.set('cu', 'INR');
-      if (txnRef) upiParams.set('tr', txnRef);
-      if (txnNote) upiParams.set('tn', txnNote);
-      if (mc) upiParams.set('mc', mc);
-
-      const queryString = upiParams.toString();
-
-      if (app === 'gpay') return `tez://upi/pay?${queryString}`;
-      if (app === 'phonepe') return `phonepe://pay?${queryString}`;
-      if (app === 'paytm') return `paytmmp://pay?${queryString}`;
-      return `upi://pay?${queryString}`;
-    }
-
-    return baseLink;
+    if (app === 'gpay') return `tez://upi/pay?${upiQuery}`;
+    if (app === 'phonepe') return `phonepe://pay?${upiQuery}`;
+    if (app === 'paytm') return `paytmmp://pay?${upiQuery}`;
+    return `upi://pay?${upiQuery}`;
   };
 
   const validateOrderInputs = () => {
@@ -320,67 +308,9 @@ export const CheckoutView: React.FC = () => {
       return;
     }
 
-    // IF PAY ONLINE (UPIQRPay Dynamic Gateway):
-    const orderRef = `ord-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
-    isCommittingRef.current = false;
-    setPendingOrderId(orderRef);
-    setPaymentStatus('WAITING');
-    setPaymentUtr(null);
-
-    // Central Platform Merchant Policy:
-    // All stalls route customer payments to Mohit Santosh Singh's merchant (BharatPe / UPIQRPay).
-    // Stall owners collect their payout from platform. Big shops with direct connector can be enabled in future.
-    const targetUpiId = (shopDetails?.enableDirectMerchant && shopDetails?.upiId)
-      ? shopDetails.upiId
-      : PLATFORM_UPI_ID;
-    const targetShopName = (shopDetails?.enableDirectMerchant && shopDetails?.name)
-      ? shopDetails.name
-      : PLATFORM_MERCHANT_NAME;
-    const orderNote = `FoodFax - ${shopName || shopDetails?.name || 'Stall Order'} (${orderRef})`;
-    const formattedAmount = (grandTotal || 0).toFixed(2);
-    const instantUpiLink = `upi://pay?pa=${encodeURIComponent(targetUpiId)}&pn=${encodeURIComponent(targetShopName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(orderNote)}&tr=${orderRef}`;
-    const instantQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(instantUpiLink)}`;
-
-    // Set immediate working UPI QR so modal opens INSTANTLY in 0ms with zero loading delay!
-    setUpiData({
-      paymentId: orderRef,
-      orderId: orderRef,
-      amount: grandTotal,
-      qrCode: instantQrCode,
-      upiLink: instantUpiLink,
-      payUrl: instantUpiLink,
-      expiresAt: new Date(Date.now() + 300000).toISOString(),
-      status: 'pending',
-    });
-    setIsPaymentModalOpen(true);
-    setIsSubmitting(false);
-
-    // Concurrently fetch dynamic gateway QR in background to upgrade to BharatPe Auto-Verify
-    paymentService.createUpiOrder({
-      orderId: orderRef,
-      customerPhone: customerPhone.trim(),
-      customerName: customerName.trim(),
-      amount: grandTotal,
-      shopId: effectiveShopId,
-    }).then((upiResult) => {
-      if (upiResult.success && upiResult.data) {
-        setUpiData(upiResult.data);
-      }
-    }).catch(() => {
-      // Instant QR is already rendered and working
-    });
-  };
-
-  /**
-   * Called automatically when UPIQRPay gateway confirms payment via bank status/webhook
-   */
-  const handleGatewayConfirmedPayment = async (utrString: string) => {
-    if (isCommittingRef.current) return;
-    isCommittingRef.current = true;
-    setIsVerifying(true);
-    setPaymentStatus('PAID');
-    setPaymentUtr(utrString);
-
+    // IF PAY ONLINE (Central Platform Merchant & UPI Gateway):
+    setIsSubmitting(true);
+    let orderRef = '';
     try {
       const sourceItems = items && items.length > 0 ? items : cartItemsSnapshotRef.current;
       const orderItems = sourceItems.map(({ menuItem, quantity }) => ({
@@ -393,11 +323,10 @@ export const CheckoutView: React.FC = () => {
       }));
 
       const orderSubtotal = orderItems.reduce((sum, it) => sum + (it.price || 0) * (it.quantity || 1), 0);
-      const orderTotal = payableAmount || grandTotal || orderSubtotal;
-      const effectiveShopId = shopDetails?.id || shopId!;
+      const orderTotal = grandTotal || orderSubtotal;
 
+      // 1. Immediately commit order as PENDING so it is permanently tracked with its token
       const newOrder = await commitOrderAndClearCart({
-        id: pendingOrderId || undefined,
         shopId: effectiveShopId,
         shopName: shopName || shopDetails?.name || 'Food Stall',
         shopImage: shopImage || shopDetails?.image || undefined,
@@ -408,8 +337,7 @@ export const CheckoutView: React.FC = () => {
         orderType,
         tableNumber: orderType === 'DINE_IN' ? tableNumber.trim() : undefined,
         paymentMethod: 'PAY_ONLINE',
-        paymentStatus: 'PAID',
-        utrNumber: utrString,
+        paymentStatus: 'PENDING',
         items: orderItems,
         subtotal: orderSubtotal,
         total: orderTotal,
@@ -417,39 +345,111 @@ export const CheckoutView: React.FC = () => {
         instructions: instructions.trim() || undefined,
       });
 
-      setTimeout(() => {
-        setIsPaymentModalOpen(false);
-        recordPlacedOrder(newOrder.id);
-        navigate(`/order/${newOrder.id}`);
-      }, 1400);
-    } catch (err: any) {
-      console.error('Error committing gateway verified order:', err);
+      orderRef = newOrder.id;
+      recordPlacedOrder(orderRef);
+      setPendingOrderId(orderRef);
       isCommittingRef.current = false;
-      setErrorMessage(err?.message || 'Error confirming order. Please contact counter staff.');
+      setPaymentStatus('WAITING');
+      setPaymentUtr(null);
+
+      // 2. Central Platform Merchant Policy: Mohit Santosh Singh (BharatPe UPI ID)
+      const targetUpiId = (shopDetails?.enableDirectMerchant && shopDetails?.upiId)
+        ? shopDetails.upiId
+        : PLATFORM_UPI_ID;
+      const targetShopName = (shopDetails?.enableDirectMerchant && shopDetails?.name)
+        ? shopDetails.name
+        : PLATFORM_MERCHANT_NAME;
+      const orderNote = `FoodFax Order ${orderRef}`;
+      const formattedAmount = (grandTotal || 0).toFixed(2);
+      const instantUpiLink = `upi://pay?pa=${encodeURIComponent(targetUpiId)}&pn=${encodeURIComponent(targetShopName)}&am=${formattedAmount}&cu=INR&tn=${encodeURIComponent(orderNote)}&tr=${encodeURIComponent(orderRef)}`;
+      const instantQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(instantUpiLink)}`;
+
+      // 3. Open modal INSTANTLY in 0ms with exact order amount
+      setUpiData({
+        paymentId: orderRef,
+        orderId: orderRef,
+        amount: grandTotal,
+        qrCode: instantQrCode,
+        upiLink: instantUpiLink,
+        payUrl: instantUpiLink,
+        expiresAt: new Date(Date.now() + 300000).toISOString(),
+        status: 'pending',
+      });
+      setIsPaymentModalOpen(true);
+
+      // 4. Background registration with UPIQRPay for automatic webhook settlement
+      paymentService.createUpiOrder({
+        orderId: orderRef,
+        customerPhone: customerPhone.trim(),
+        customerName: customerName.trim(),
+        amount: grandTotal,
+        shopId: effectiveShopId,
+      }).then((upiResult) => {
+        if (upiResult.success && upiResult.data) {
+          setUpiData((prev) => ({
+            ...prev!,
+            ...upiResult.data,
+            // Strictly enforce original cart amount (prevent arbitrary paise override)
+            amount: grandTotal,
+          }));
+        }
+      }).catch(() => {});
+    } catch (err: any) {
+      console.error('Failed to initialize online order:', err);
+      setErrorMessage(err?.message || 'Could not initialize order. Please try again.');
     } finally {
-      setIsVerifying(false);
+      setIsSubmitting(false);
     }
+  };
+
+  /**
+   * Called automatically when UPIQRPay gateway confirms payment via bank status/webhook
+   */
+  const handleGatewayConfirmedPayment = async (utrString: string) => {
+    if (isCommittingRef.current) return;
+    isCommittingRef.current = true;
+    setIsVerifying(true);
+    setPaymentStatus('PAID');
+    setPaymentUtr(utrString);
+
+    const targetOrderId = pendingOrderId;
+    if (targetOrderId) {
+      try {
+        await orderService.markPaymentPaid(targetOrderId, utrString);
+        recordPlacedOrder(targetOrderId);
+      } catch (err) {
+        console.warn('[CheckoutView] markPaymentPaid background error:', err);
+      }
+    }
+
+    setTimeout(() => {
+      setIsPaymentModalOpen(false);
+      if (targetOrderId) {
+        navigate(`/order/${targetOrderId}`);
+      }
+    }, 1400);
   };
 
   /**
    * Manual one-click status check (no UTR input required!) — polls UPIQRPay server immediately
    */
   const handleCheckPaymentNow = async () => {
-    if (!upiData?.paymentId) return;
+    const targetId = pendingOrderId || upiData?.paymentId;
+    if (!targetId) return;
     setIsVerifying(true);
     setStatusCheckMsg(null);
     try {
-      const res = await paymentService.checkPaymentStatus(upiData.paymentId, shopId || undefined);
+      const res = await paymentService.checkPaymentStatus(targetId, shopId || undefined);
       const statusUpper = String(res?.data?.status || '').toUpperCase();
       if (statusUpper === 'PAID' || statusUpper === 'SUCCESS') {
-        await handleGatewayConfirmedPayment(res?.data?.utrNumber || upiData.paymentId);
+        await handleGatewayConfirmedPayment(res?.data?.utrNumber || targetId);
       } else {
         setStatusCheckMsg(
-          'Waiting for payment confirmation from bank... Complete payment in GPay / PhonePe / Paytm and it will auto-verify within 2–3 seconds.'
+          'Waiting for bank settlement... If your payment is done, click "Enter 12-digit UPI Reference / UTR Number" below for instant confirmation.'
         );
       }
     } catch {
-      setStatusCheckMsg('Checking with UPI gateway... Please wait a moment.');
+      setStatusCheckMsg('Checking with UPI gateway... You can also submit the 12-digit UTR below.');
     } finally {
       setIsVerifying(false);
     }
