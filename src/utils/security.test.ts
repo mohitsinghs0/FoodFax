@@ -7,6 +7,7 @@ import {
   sanitizeTextInput,
   maskPhoneNumber,
   isCustomerAuthorizedForOrder,
+  canCustomerCancelOrder,
 } from './orderValidation';
 
 describe('1. Customer Tenant Isolation & IDOR Access Control', () => {
@@ -251,5 +252,182 @@ describe('8. Central Merchant UPI & Google Pay URI Standards', () => {
     assert.equal(upiQuery.includes('+'), false, 'UPI query string must not contain + signs');
     assert.ok(upiQuery.includes('pn=Mohit%20Santosh%20Singh'), 'Payee name must be percent encoded');
     assert.ok(upiQuery.includes('am=1.00'), 'Amount must be exactly 1.00');
+  });
+});
+
+describe('9. Secrets & Frontend Bundle Hygiene (assertNoServiceRoleKey)', () => {
+  it('strictly blocks Supabase service_role key string in frontend', async () => {
+    const { assertNoServiceRoleKey } = await import('../supabase');
+    assert.throws(
+      () => assertNoServiceRoleKey('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.service_role.fake'),
+      /CRITICAL SECURITY VIOLATION/
+    );
+  });
+
+  it('detects and blocks JWT with payload role: "service_role"', async () => {
+    const { assertNoServiceRoleKey } = await import('../supabase');
+    // base64 encoded {"role":"service_role","exp":1999999999}
+    const payloadBase64 = Buffer.from(JSON.stringify({ role: 'service_role', exp: 1999999999 })).toString('base64');
+    const fakeServiceRoleJwt = `header.${payloadBase64}.signature`;
+    assert.throws(
+      () => assertNoServiceRoleKey(fakeServiceRoleJwt),
+      /CRITICAL SECURITY VIOLATION/
+    );
+  });
+
+  it('allows safe public anon keys', async () => {
+    const { assertNoServiceRoleKey } = await import('../supabase');
+    const payloadBase64 = Buffer.from(JSON.stringify({ role: 'anon', exp: 1999999999 })).toString('base64');
+    const fakeAnonJwt = `header.${payloadBase64}.signature`;
+    assert.doesNotThrow(() => assertNoServiceRoleKey(fakeAnonJwt));
+  });
+});
+
+describe('10. Bot Trap Honeypot & Price Verification', () => {
+  it('detects bot spam when bot_trap honeypot is populated', async () => {
+    const { isBotDetected } = await import('./orderValidation');
+    assert.equal(isBotDetected('viagra-crypto-spammer'), true);
+    assert.equal(isBotDetected('http://spam.ru'), true);
+    assert.equal(isBotDetected(''), false);
+    assert.equal(isBotDetected(undefined), false);
+    assert.equal(isBotDetected(null), false);
+  });
+
+  it('validates price and accurately recalculates subtotal client-side', async () => {
+    const { validatePriceAndSubtotal } = await import('./orderValidation');
+    const items = [
+      { name: 'Vada Pav', price: 20, quantity: 2 },
+      { name: 'Samosa', price: 18, quantity: 1 },
+    ];
+    const res = validatePriceAndSubtotal(items, 58);
+    assert.equal(res.valid, true);
+    assert.equal(res.recalculatedSubtotal, 58);
+  });
+
+  it('rejects negative item prices or NaN totals', async () => {
+    const { validatePriceAndSubtotal } = await import('./orderValidation');
+    const badItems = [{ name: 'Discount Glitch', price: -50, quantity: 1 }];
+    const res = validatePriceAndSubtotal(badItems, -50);
+    assert.equal(res.valid, false);
+    assert.match(res.error || '', /invalid price/);
+  });
+
+  it('rejects subtotal mismatch between declared total and line items sum', async () => {
+    const { validatePriceAndSubtotal } = await import('./orderValidation');
+    const items = [{ name: 'Vada Pav', price: 20, quantity: 1 }];
+    // Declared 10 instead of 20
+    const res = validatePriceAndSubtotal(items, 10);
+    assert.equal(res.valid, false);
+    assert.match(res.error || '', /Subtotal mismatch/);
+  });
+});
+
+describe('11. 7-Day Order Cache Pruning & Sensitive Data Protection', () => {
+  it('prunes orders older than 7 days from localStorage cache', async () => {
+    const { pruneExpiredOrders, MAX_ORDER_CACHE_AGE_MS } = await import('../services/orderService');
+    const now = Date.now();
+    const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const twoDaysAgo = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+    const testOrders: any[] = [
+      { id: 'fresh-ord-1', shopId: 'shop-real-1', createdAt: twoDaysAgo },
+      { id: 'expired-ord-2', shopId: 'shop-real-2', createdAt: tenDaysAgo },
+    ];
+
+    const pruned = pruneExpiredOrders(testOrders);
+    assert.equal(pruned.length, 1);
+    assert.equal(pruned[0].id, 'fresh-ord-1');
+  });
+
+  it('rejects storing sensitive credit card or banking credentials', async () => {
+    const { assertNoSensitiveFinancialData } = await import('../services/orderService');
+    const insecureOrder = {
+      id: 'ord-insecure',
+      total: 100,
+      cardNumber: '4111222233334444',
+      cvv: '123',
+    };
+
+    assert.throws(
+      () => assertNoSensitiveFinancialData(insecureOrder),
+      /Sensitive financial credential field/
+    );
+
+    const safeOrder = {
+      id: 'ord-safe',
+      total: 100,
+      paymentMethod: 'PAY_ONLINE',
+      utrNumber: '529482910394',
+    };
+    assert.doesNotThrow(() => assertNoSensitiveFinancialData(safeOrder));
+  });
+});
+
+describe('12. Legal Policies & Custom 404 Routing', () => {
+  it('resolves legal routes /privacy, /terms, /refunds and 404 for unknown routes', async () => {
+    const { parsePath } = await import('../context/RouterContext');
+    assert.equal(parsePath('/privacy').name, 'privacy');
+    assert.equal(parsePath('/terms').name, 'terms');
+    assert.equal(parsePath('/refunds').name, 'refunds');
+    assert.equal(parsePath('/unknown-street-stall-404').name, 'not-found');
+    assert.equal(parsePath('/').name, 'home');
+  });
+});
+
+describe('13. Order Pre-Acceptance Cancellation & Post-Acceptance Lock Protocol', () => {
+  it('permits customer cancellation and full refund claims strictly when status is PENDING', () => {
+    assert.equal(canCustomerCancelOrder('PENDING'), true);
+    assert.equal(canCustomerCancelOrder('pending'), true);
+  });
+
+  it('strictly locks customer cancellation once stall owner accepts or begins preparation', () => {
+    assert.equal(canCustomerCancelOrder('ACCEPTED'), false);
+    assert.equal(canCustomerCancelOrder('PREPARING'), false);
+    assert.equal(canCustomerCancelOrder('READY'), false);
+    assert.equal(canCustomerCancelOrder('COMPLETED'), false);
+    assert.equal(canCustomerCancelOrder('CANCELLED'), false);
+    assert.equal(canCustomerCancelOrder(null), false);
+    assert.equal(canCustomerCancelOrder(undefined), false);
+  });
+
+  it('rejects customer state transition from ACCEPTED to CANCELLED', () => {
+    const res = validateOrderStateTransition('ACCEPTED', 'CANCELLED', 'customer');
+    assert.equal(res.valid, false);
+    assert.match(res.error || '', /Order has already been accepted/);
+  });
+
+  it('allows customer state transition from PENDING to CANCELLED', () => {
+    const res = validateOrderStateTransition('PENDING', 'CANCELLED', 'customer');
+    assert.equal(res.valid, true);
+  });
+
+  it('throws an error if customer tries to cancel an accepted order via orderService', async () => {
+    const { orderService } = await import('../services/orderService');
+    const orders = orderService.getStoredOrders();
+    const acceptedOrder: any = {
+      id: 'ord-accepted-test',
+      shopId: 'shop-real-1',
+      orderStatus: 'ACCEPTED',
+      paymentMethod: 'PAY_ONLINE',
+      total: 100,
+      createdAt: new Date().toISOString(),
+    };
+    orderService.saveOrders([acceptedOrder, ...orders]);
+
+    await assert.rejects(
+      async () => {
+        await orderService.cancelOrder('ord-accepted-test', 'Changed mind', 'customer');
+      },
+      /Order has already been accepted by the food stall/
+    );
+  });
+});
+
+describe('14. Smart Listing Cache & In-Memory Deduplication', () => {
+  it('generates deterministic location-keyed cache identifiers', async () => {
+    const { getListingCacheKey } = await import('../services/shopService');
+    const key1 = getListingCacheKey(2, 'chaat', { latitude: 19.3821, longitude: 72.8291 });
+    const key2 = getListingCacheKey(2, 'chaat', { latitude: 19.3824, longitude: 72.8294 });
+    assert.equal(key1, key2, 'Nearby coordinates within 3 decimal places should share the listing cache bucket');
   });
 });

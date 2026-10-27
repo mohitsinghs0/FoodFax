@@ -3,7 +3,11 @@ import { INITIAL_ORDERS } from '../data/mockData';
 import { firestoreSync, normalizeOrderDoc, onDatabaseOrderCommitted, MOCK_SHOP_IDS } from './firestoreSyncService';
 import { notificationService } from './notificationService';
 import { shopService } from './shopService';
-import { assertValidOrderSubmission, validateOrderStateTransition } from '../utils/orderValidation';
+import { 
+  assertValidOrderSubmission, 
+  validateOrderStateTransition,
+  canCustomerCancelOrder 
+} from '../utils/orderValidation';
 import { isSupabaseConfigured } from '../supabase';
 
 const ORDERS_STORAGE_KEY = 'foodflow_customer_orders';
@@ -30,6 +34,70 @@ export const MOCK_ORDER_IDS = new Set<string>([
   'ord-1005',
   ...INITIAL_ORDERS.map((o) => o.id),
 ]);
+
+// Maximum age for client-side order cache (7 days)
+export const MAX_ORDER_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Prunes expired orders older than 7 days from cache, as well as demo/mock orders.
+ */
+export function pruneExpiredOrders(orders: Order[], maxAgeMs: number = MAX_ORDER_CACHE_AGE_MS): Order[] {
+  if (!Array.isArray(orders)) return [];
+  const now = Date.now();
+
+  return orders.filter((o: Order) => {
+    if (!o || !o.id || o.isDemo || MOCK_ORDER_IDS.has(o.id) || MOCK_SHOP_IDS.has(o.shopId)) {
+      return false;
+    }
+    if (o.createdAt) {
+      const orderTime = new Date(o.createdAt).getTime();
+      if (!isNaN(orderTime) && now - orderTime > maxAgeMs) {
+        return false; // Prune order older than 7 days
+      }
+    }
+    return true;
+  });
+}
+
+/**
+ * Asserts that an order object NEVER contains credit/debit card numbers,
+ * CVV, PIN, or netbanking credentials before persisting to localStorage.
+ */
+export function assertNoSensitiveFinancialData(payload: any): void {
+  if (!payload || typeof payload !== 'object') return;
+  const sensitiveKeys = [
+    'cardnumber',
+    'card_number',
+    'cvv',
+    'cvc',
+    'cardpin',
+    'card_pin',
+    'netbankingpassword',
+    'netbanking_password',
+    'bankpassword',
+    'bank_password',
+    'atmpin',
+    'atm_pin'
+  ];
+
+  const checkObject = (obj: any) => {
+    for (const key of Object.keys(obj)) {
+      const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '');
+      if (sensitiveKeys.some((s) => normalizedKey.includes(s))) {
+        throw new Error(
+          `SECURITY VIOLATION: Sensitive financial credential field "${key}" detected. Card and netbanking credentials must NEVER be stored in localStorage.`
+        );
+      }
+      if (obj[key] && typeof obj[key] === 'object') {
+        checkObject(obj[key]);
+      }
+    }
+  };
+
+  checkObject(payload);
+}
+
+let memoryOrdersFallback: Order[] = [];
 
 export const orderService = {
   isDemoCustomerCheck(_customerId?: string): boolean {
@@ -71,30 +139,38 @@ export const orderService = {
   },
 
   getStoredOrders(): Order[] {
-    try {
-      const stored = localStorage.getItem(ORDERS_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(
-            (o: Order) => o && o.id && !o.isDemo && !MOCK_ORDER_IDS.has(o.id) && !MOCK_SHOP_IDS.has(o.shopId)
-          );
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(ORDERS_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            const valid = pruneExpiredOrders(parsed);
+            // If expired orders were pruned, update localStorage silently
+            if (valid.length !== parsed.length) {
+              this.saveOrders(valid);
+            }
+            memoryOrdersFallback = valid;
+            return valid;
+          }
         }
+      } catch {
+        // fallback
       }
-    } catch {
-      // fallback
     }
-    return [];
+    return pruneExpiredOrders(memoryOrdersFallback);
   },
 
   saveOrders(orders: Order[]): void {
-    try {
-      const clean = orders.filter(
-        (o) => o && o.id && !o.isDemo && !MOCK_ORDER_IDS.has(o.id) && !MOCK_SHOP_IDS.has(o.shopId)
-      );
-      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(clean));
-    } catch {
-      // fallback
+    const clean = pruneExpiredOrders(orders);
+    clean.forEach((o) => assertNoSensitiveFinancialData(o));
+    memoryOrdersFallback = clean;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(clean));
+      } catch (err) {
+        console.warn('[orderService] Error saving clean orders to storage:', err);
+      }
     }
   },
 
@@ -350,41 +426,47 @@ export const orderService = {
   ): Promise<Order | null> {
     const orders = this.getStoredOrders();
     const index = orders.findIndex((o) => o.id === orderId);
-    let targetOrder: Order | null = null;
+    let existingOrder: Order | null = index !== -1 ? orders[index] : await firestoreSync.getOrder(orderId);
+
+    if (!existingOrder) return null;
+
+    // Strict Customer Cancellation Rule:
+    // Customers can cancel and claim 100% full refund ONLY while status is PENDING (before stall acceptance).
+    // Once accepted or in preparation, customer cancellation is strictly locked.
+    if (cancelledBy === 'customer' && !canCustomerCancelOrder(existingOrder.orderStatus)) {
+      throw new Error(
+        `Order has already been accepted by the food stall (${existingOrder.orderStatus}). Cancellations and refunds are strictly not permitted once kitchen preparation begins.`
+      );
+    }
+
     const now = new Date().toISOString();
+    const isPaidOnline = existingOrder.paymentMethod === 'PAY_ONLINE' || existingOrder.paymentStatus === 'PAID';
+
+    const targetOrder: Order = {
+      ...existingOrder,
+      orderStatus: 'CANCELLED' as OrderStatus,
+      cancellationReason: reason,
+      cancelledAt: now,
+      cancelledBy,
+      updatedAt: now,
+      ...(isPaidOnline && {
+        refundStatus: 'INITIATED',
+        refundAmount: existingOrder.total,
+        refundReason: 'Customer pre-acceptance cancellation (100% full refund)',
+      }),
+    };
 
     if (index !== -1) {
-      targetOrder = {
-        ...orders[index],
-        orderStatus: 'CANCELLED' as OrderStatus,
-        cancellationReason: reason,
-        cancelledAt: now,
-        cancelledBy,
-        updatedAt: now,
-      };
       orders[index] = targetOrder;
       this.saveOrders(orders);
     } else {
-      const remote = await firestoreSync.getOrder(orderId);
-      if (remote) {
-        targetOrder = {
-          ...remote,
-          orderStatus: 'CANCELLED' as OrderStatus,
-          cancellationReason: reason,
-          cancelledAt: now,
-          cancelledBy,
-          updatedAt: now,
-        };
-        this.saveOrders([targetOrder, ...orders]);
-      }
+      this.saveOrders([targetOrder, ...orders]);
     }
-
-    if (!targetOrder) return null;
 
     this.notifyOrderListeners(targetOrder);
     this.notifyShopListeners(targetOrder.shopId);
 
-    // Update in Firestore
+    // Update in Firestore / PostgreSQL
     try {
       await firestoreSync.updateOrderStatus(
         orderId, 
@@ -393,12 +475,16 @@ export const orderService = {
           cancellationReason: reason,
           cancelledAt: now,
           cancelledBy,
+          ...(isPaidOnline && {
+            refund_status: 'INITIATED',
+            refund_amount: existingOrder.total,
+          }),
         },
         cancelledBy,
         `Order cancelled by ${cancelledBy}: ${reason}`
       );
     } catch (err) {
-      console.warn('[orderService] Failed to sync order cancellation to Firestore:', err);
+      console.warn('[orderService] Failed to sync order cancellation to database:', err);
     }
 
     // Trigger real-time notification for the specific shop owner

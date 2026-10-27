@@ -250,3 +250,65 @@ export async function getBrowserLocation(): Promise<GeoPoint> {
     );
   });
 }
+
+/**
+ * Resolves shop GPS coordinates, falling back gracefully through:
+ * 1. Explicit shop.latitude & shop.longitude
+ * 2. Nested shop.location.latitude & shop.location.longitude
+ * 3. Default active city coordinates (Naigaon East / MMR)
+ */
+export function resolveShopCoordinates(shop?: any): { latitude: number; longitude: number } {
+  const lat = Number(shop?.latitude || shop?.location?.latitude);
+  const lng = Number(shop?.longitude || shop?.location?.longitude);
+
+  if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+    return { latitude: lat, longitude: lng };
+  }
+
+  return {
+    latitude: DEFAULT_CUSTOMER_LOCATION.latitude,
+    longitude: DEFAULT_CUSTOMER_LOCATION.longitude,
+  };
+}
+
+/**
+ * Builds canonical Google Maps navigation/directions URL
+ */
+export function buildGoogleMapsDirectionsUrl(
+  latitude: number,
+  longitude: number,
+  destinationName?: string,
+  travelMode: 'walking' | 'driving' = 'walking'
+): string {
+  const destName = destinationName ? encodeURIComponent(destinationName.trim()) : '';
+  return `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&destination_place_id=${destName}&travelmode=${travelMode}`;
+}
+
+/**
+ * Builds Google Maps search / point-of-interest URL
+ */
+export function buildGoogleMapsSearchUrl(latitude: number, longitude: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+}
+
+/**
+ * Calculates estimated travel time from distance in km
+ */
+export function calculateEstimatedTime(
+  distanceKm: number,
+  mode: 'walking' | 'driving' = 'walking'
+): { minutes: number; label: string } {
+  const dist = Math.max(0.05, Number(distanceKm) || 0.1);
+  // Average speeds in Indian urban street counters: walking ~4.5 km/h, driving/bike ~20 km/h
+  const speed = mode === 'walking' ? 4.5 : 20.0;
+  const rawMinutes = (dist / speed) * 60;
+  const minutes = Math.max(1, Math.round(rawMinutes));
+
+  const label =
+    mode === 'walking'
+      ? `${minutes} min${minutes > 1 ? 's' : ''} walk`
+      : `${minutes} min${minutes > 1 ? 's' : ''} drive`;
+
+  return { minutes, label };
+}
+

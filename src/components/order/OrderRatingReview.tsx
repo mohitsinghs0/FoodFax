@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Star, Sparkles, CheckCircle2, MessageSquare, ThumbsUp, Send } from 'lucide-react';
 import { orderService } from '../../services/orderService';
+import { sanitizeTextInput, isBotDetected } from '../../utils/orderValidation';
 import { Order } from '../../types';
 
 interface OrderRatingReviewProps {
@@ -40,6 +41,7 @@ export const OrderRatingReview: React.FC<OrderRatingReviewProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<boolean>(!!order.rating);
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [botTrap, setBotTrap] = useState<string>('');
 
   const handleTagToggle = (tag: string) => {
     setSelectedTags((prev) =>
@@ -49,14 +51,16 @@ export const OrderRatingReview: React.FC<OrderRatingReviewProps> = ({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isBotDetected(botTrap)) return;
     if (rating < 1) return;
 
     setSubmitting(true);
     try {
+      const safeReview = sanitizeTextInput(reviewText);
       const updated = await orderService.submitOrderReview(
         order.id,
         rating,
-        reviewText.trim(),
+        safeReview,
         selectedTags
       );
       if (updated) {
@@ -263,6 +267,18 @@ export const OrderRatingReview: React.FC<OrderRatingReviewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Honeypot Bot Trap */}
+      <div style={{ display: 'none', position: 'absolute', left: '-9999px' }} aria-hidden="true">
+        <input
+          type="text"
+          name="bot_trap"
+          value={botTrap}
+          onChange={(e) => setBotTrap(e.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
 
       {/* Review Comment Input */}
       <div className="space-y-1.5">

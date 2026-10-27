@@ -6,6 +6,22 @@ import { isSupabaseConfigured } from '../supabase';
 const MENU_ITEMS_KEY = 'foodflow_menu_items';
 const CATEGORIES_KEY = 'foodflow_categories';
 
+// Sub-50ms API Caching (5-minute TTL) for stall menus
+export const MENU_CACHE_TTL_MS = 5 * 60 * 1000;
+interface MenuCacheEntry {
+  data: MenuItem[];
+  timestamp: number;
+}
+const MENU_ITEMS_CACHE = new Map<string, MenuCacheEntry>();
+
+export function clearMenuCache(shopId?: string): void {
+  if (shopId) {
+    MENU_ITEMS_CACHE.delete(shopId.toLowerCase());
+  } else {
+    MENU_ITEMS_CACHE.clear();
+  }
+}
+
 export const menuService = {
   getStoredItems(): MenuItem[] {
     try {
@@ -56,12 +72,23 @@ export const menuService = {
   },
 
   async getShopMenu(shopId: string, shopSlug?: string): Promise<MenuItem[]> {
-    await new Promise((r) => setTimeout(r, 10));
+    const cacheKey = (shopId || shopSlug || '').toLowerCase().trim();
+    if (cacheKey) {
+      const cached = MENU_ITEMS_CACHE.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < MENU_CACHE_TTL_MS) {
+        return cached.data;
+      }
+    }
 
     // 1. Fetch from Supabase / live sync
     try {
       const remoteItems = await firestoreSync.getMenuItemsByShop(shopId, shopSlug);
       if (remoteItems && remoteItems.length > 0) {
+        if (cacheKey) {
+          MENU_ITEMS_CACHE.set(cacheKey, { data: remoteItems, timestamp: Date.now() });
+          if (shopId) MENU_ITEMS_CACHE.set(shopId.toLowerCase().trim(), { data: remoteItems, timestamp: Date.now() });
+          if (shopSlug) MENU_ITEMS_CACHE.set(shopSlug.toLowerCase().trim(), { data: remoteItems, timestamp: Date.now() });
+        }
         return remoteItems;
       }
     } catch (err) {

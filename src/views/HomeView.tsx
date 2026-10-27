@@ -13,6 +13,7 @@ import {
 } from '../services/geoService';
 import { Shop, ShopCategory, Order } from '../types';
 import { ShopCard } from '../components/shop/ShopCard';
+import { LocationConsentModal } from '../components/common/LocationConsentModal';
 import { 
   Search, 
   QrCode, 
@@ -363,6 +364,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
   });
 
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
+  const [isLocationConsentOpen, setIsLocationConsentOpen] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
 
@@ -525,7 +527,13 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
     setDistanceFilter('all');
   };
 
-  const handleDetectGPS = async () => {
+  // Pre-permission Explanatory Location Consent
+  const handleDetectGPS = () => {
+    setIsLocationConsentOpen(true);
+  };
+
+  const executeGpsDetection = async () => {
+    setIsLocationConsentOpen(false);
     setGpsLoading(true);
     setGpsMessage(null);
     try {
@@ -1552,6 +1560,17 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           </div>
         </div>
       )}
+
+      {/* Pre-Permission Explanatory Location Consent Dialog */}
+      <LocationConsentModal
+        isOpen={isLocationConsentOpen}
+        onAllow={executeGpsDetection}
+        onDeny={() => setIsLocationConsentOpen(false)}
+        onSelectManualCity={() => {
+          setIsLocationConsentOpen(false);
+          setIsCityModalOpen(true);
+        }}
+      />
 
     </div>
   );

@@ -157,6 +157,9 @@ export interface Order {
   cancellationReason?: string;
   cancelledAt?: string;
   cancelledBy?: 'customer' | 'owner' | 'system';
+  refundStatus?: string;
+  refundAmount?: number;
+  refundReason?: string;
   rating?: number;
   reviewText?: string;
   reviewedAt?: string;

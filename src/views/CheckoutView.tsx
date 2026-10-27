@@ -5,7 +5,19 @@ import { useCart } from '../context/CartContext';
 import { shopService } from '../services/shopService';
 import { paymentService } from '../services/paymentService';
 import { orderService } from '../services/orderService';
-import { recordPlacedOrder } from '../utils/orderValidation';
+import { 
+  recordPlacedOrder, 
+  sanitizeTextInput, 
+  isBotDetected, 
+  validatePriceAndSubtotal,
+  buildCanonicalUpiUri,
+  buildTezGpayUri,
+  buildPhonePeUri,
+  buildPaytmUri,
+  sanitizeCheckoutUpiData,
+  PLATFORM_UPI_ID as CANONICAL_UPI_ID,
+  PLATFORM_MERCHANT_NAME as CANONICAL_MERCHANT_NAME,
+} from '../utils/orderValidation';
 import { OrderType, PaymentMethod, Shop, UPIQRPayCreateResponse } from '../types';
 import { 
   ArrowLeft, 
@@ -28,8 +40,8 @@ import {
 } from 'lucide-react';
 
 // FoodFax Central Platform Merchant Details (All stalls route here; owners collect payout from platform)
-export const PLATFORM_UPI_ID = 'bharatpe2e0p0d8x5a59798@unitype';
-export const PLATFORM_MERCHANT_NAME = 'Mohit Santosh Singh';
+export const PLATFORM_UPI_ID = CANONICAL_UPI_ID;
+export const PLATFORM_MERCHANT_NAME = CANONICAL_MERCHANT_NAME;
 
 export const CheckoutView: React.FC = () => {
   const { navigate, goBack } = useRouter();
@@ -59,6 +71,10 @@ export const CheckoutView: React.FC = () => {
   const [manualUtr, setManualUtr] = useState('');
   const [showUtrInput, setShowUtrInput] = useState(false);
   const [utrError, setUtrError] = useState<string | null>(null);
+
+  // Bot Trap Honeypot & Actionable Retry State for Order Persistence
+  const [botTrap, setBotTrap] = useState('');
+  const [orderErrorDetail, setOrderErrorDetail] = useState<{ message: string; onRetry: () => void } | null>(null);
 
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isCommittingRef = useRef<boolean>(false);
@@ -195,21 +211,22 @@ export const CheckoutView: React.FC = () => {
    * transaction reference (tr) linked to the gateway order ID, and note (tn).
    */
   const getUpiAppHref = (app: 'gpay' | 'phonepe' | 'paytm' | 'bhim'): string => {
-    const formattedAmount = (grandTotal || 0).toFixed(2);
     const txnRef = pendingOrderId || upiData?.orderId || `ord-${Date.now()}`;
     const txnNote = `FoodFax Order ${txnRef}`;
-    const merchantPa = PLATFORM_UPI_ID;
-    const merchantPn = PLATFORM_MERCHANT_NAME;
+    const merchantPa = (shopDetails?.enableDirectMerchant && shopDetails?.upiId)
+      ? shopDetails.upiId
+      : PLATFORM_UPI_ID;
+    const merchantPn = (shopDetails?.enableDirectMerchant && shopDetails?.name)
+      ? shopDetails.name
+      : PLATFORM_MERCHANT_NAME;
 
-    // Standard percent-encoded query (%20 instead of +) so Google Pay / PhonePe parse cleanly
-    const upiQuery = [
-      `pa=${encodeURIComponent(merchantPa)}`,
-      `pn=${encodeURIComponent(merchantPn)}`,
-      `am=${formattedAmount}`,
-      `cu=INR`,
-      `tn=${encodeURIComponent(txnNote)}`,
-      `tr=${encodeURIComponent(txnRef)}`,
-    ].join('&');
+    const uriParams = {
+      pa: merchantPa,
+      pn: merchantPn,
+      am: grandTotal || 0,
+      tr: txnRef,
+      tn: txnNote,
+    };
 
     const isMobile =
       typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -218,13 +235,18 @@ export const CheckoutView: React.FC = () => {
       return upiData.payUrl;
     }
 
-    if (app === 'gpay') return `tez://upi/pay?${upiQuery}`;
-    if (app === 'phonepe') return `phonepe://pay?${upiQuery}`;
-    if (app === 'paytm') return `paytmmp://pay?${upiQuery}`;
-    return `upi://pay?${upiQuery}`;
+    if (app === 'gpay') return buildTezGpayUri(uriParams);
+    if (app === 'phonepe') return buildPhonePeUri(uriParams);
+    if (app === 'paytm') return buildPaytmUri(uriParams);
+    return buildCanonicalUpiUri(uriParams);
   };
 
   const validateOrderInputs = () => {
+    // 0. Bot Trap Honeypot: silently drop automated bots
+    if (isBotDetected(botTrap)) {
+      return false;
+    }
+
     if (!isAuthenticated || !currentUser) {
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('foodfax_post_login_redirect', '/checkout');
@@ -234,6 +256,21 @@ export const CheckoutView: React.FC = () => {
     }
 
     if (!shopId) return false;
+
+    // 1. Client-side price & subtotal verification
+    const priceValidation = validatePriceAndSubtotal(
+      items.map((it) => ({
+        price: it.menuItem?.price,
+        quantity: it.quantity,
+        name: it.menuItem?.name,
+      })),
+      subtotal
+    );
+    if (!priceValidation.valid) {
+      setErrorMessage(priceValidation.error || 'Invalid item price or subtotal detected in cart.');
+      return false;
+    }
+
     if (orderType === 'DINE_IN' && !tableNumber.trim()) {
       setErrorMessage('Please enter your table number for Dine-In orders.');
       return false;
@@ -249,9 +286,12 @@ export const CheckoutView: React.FC = () => {
    * Called when customer clicks "Pay with UPI" or "Place Order with Cash"
    */
   const handlePlaceOrder = async () => {
+    // Idempotency lock: strictly prevent duplicate submission on double-clicks
+    if (isCommittingRef.current || isSubmitting) return;
     if (!validateOrderInputs()) return;
 
     setErrorMessage(null);
+    setOrderErrorDetail(null);
     setMerchantNotice(null);
     setStatusCheckMsg(null);
 
@@ -262,6 +302,12 @@ export const CheckoutView: React.FC = () => {
 
     const effectiveShopId = shopDetails?.id || shopId!;
 
+    // Sanitize customer inputs with DOMPurify
+    const safeCustomerName = sanitizeTextInput(customerName) || currentUser?.fullName || currentUser?.name || 'FoodFax Customer';
+    const safeCustomerPhone = sanitizeTextInput(customerPhone) || currentUser?.phone || '';
+    const safeInstructions = instructions.trim() ? sanitizeTextInput(instructions) : undefined;
+    const safeTableNumber = tableNumber.trim() ? sanitizeTextInput(tableNumber) : undefined;
+
     // If Cash at Counter: Immediately commit order and route to live tracker
     if (paymentMethod === 'CASH_AT_COUNTER') {
       setIsSubmitting(true);
@@ -270,7 +316,7 @@ export const CheckoutView: React.FC = () => {
         const orderItems = sourceItems.map(({ menuItem, quantity }) => ({
           id: `item-${Date.now()}-${menuItem.id}`,
           menuItemId: menuItem.id,
-          name: menuItem.name,
+          name: sanitizeTextInput(menuItem.name),
           price: menuItem.price,
           quantity,
           isVeg: menuItem.isVeg,
@@ -285,23 +331,28 @@ export const CheckoutView: React.FC = () => {
           shopImage: shopImage || shopDetails?.image || undefined,
           shopLocation: shopDetails?.location?.address || shopDetails?.location?.landmark || 'Counter Stall',
           customerId: currentUser?.id,
-          customerName: customerName.trim() || currentUser?.fullName || currentUser?.name || 'FoodFax Customer',
-          customerPhone: customerPhone.trim() || currentUser?.phone || '',
+          customerName: safeCustomerName,
+          customerPhone: safeCustomerPhone,
           orderType,
-          tableNumber: orderType === 'DINE_IN' ? tableNumber.trim() : undefined,
+          tableNumber: orderType === 'DINE_IN' ? safeTableNumber : undefined,
           paymentMethod: 'CASH_AT_COUNTER',
           items: orderItems,
           subtotal: orderSubtotal,
           total: orderTotal,
           estimatedPreparationMinutes: '5-10',
-          instructions: instructions.trim() || undefined,
+          instructions: safeInstructions,
         });
 
         recordPlacedOrder(newOrder.id);
         navigate(`/order/${newOrder.id}`);
       } catch (err: any) {
         console.error('Failed to place counter order:', err);
-        setErrorMessage(err?.message || 'Could not place order. Please try again.');
+        const msg = err?.message || 'Could not place order. Please try again.';
+        setErrorMessage(msg);
+        setOrderErrorDetail({
+          message: msg,
+          onRetry: () => handlePlaceOrder(),
+        });
       } finally {
         setIsSubmitting(false);
       }
@@ -352,12 +403,10 @@ export const CheckoutView: React.FC = () => {
       shopId: effectiveShopId,
     }).then((upiResult) => {
       if (upiResult.success && upiResult.data) {
-        setUpiData((prev) => ({
-          ...prev!,
-          ...upiResult.data,
-          // Strictly enforce original cart amount (prevent arbitrary paise override)
-          amount: grandTotal,
-        }));
+        setUpiData((prev) => {
+          if (!prev) return null;
+          return sanitizeCheckoutUpiData(prev, upiResult.data, grandTotal);
+        });
       }
     }).catch(() => {});
   };
@@ -377,7 +426,7 @@ export const CheckoutView: React.FC = () => {
       const orderItems = sourceItems.map(({ menuItem, quantity }) => ({
         id: `item-${Date.now()}-${menuItem.id}`,
         menuItemId: menuItem.id,
-        name: menuItem.name,
+        name: sanitizeTextInput(menuItem.name),
         price: menuItem.price,
         quantity,
         isVeg: menuItem.isVeg,
@@ -387,6 +436,11 @@ export const CheckoutView: React.FC = () => {
       const orderTotal = grandTotal || orderSubtotal;
       const effectiveShopId = shopDetails?.id || shopId!;
 
+      const safeCustomerName = sanitizeTextInput(customerName) || currentUser?.fullName || currentUser?.name || 'FoodFax Customer';
+      const safeCustomerPhone = sanitizeTextInput(customerPhone) || currentUser?.phone || '';
+      const safeInstructions = instructions.trim() ? sanitizeTextInput(instructions) : undefined;
+      const safeTableNumber = tableNumber.trim() ? sanitizeTextInput(tableNumber) : undefined;
+
       // NOW AND ONLY NOW: Commit the verified order and clear the cart!
       const newOrder = await commitOrderAndClearCart({
         id: pendingOrderId || undefined,
@@ -395,10 +449,10 @@ export const CheckoutView: React.FC = () => {
         shopImage: shopImage || shopDetails?.image || undefined,
         shopLocation: shopDetails?.location?.address || shopDetails?.location?.landmark || 'Counter Stall',
         customerId: currentUser?.id,
-        customerName: customerName.trim() || currentUser?.fullName || currentUser?.name || 'FoodFax Customer',
-        customerPhone: customerPhone.trim() || currentUser?.phone || '',
+        customerName: safeCustomerName,
+        customerPhone: safeCustomerPhone,
         orderType,
-        tableNumber: orderType === 'DINE_IN' ? tableNumber.trim() : undefined,
+        tableNumber: orderType === 'DINE_IN' ? safeTableNumber : undefined,
         paymentMethod: 'PAY_ONLINE',
         paymentStatus: 'PAID',
         utrNumber: utrString,
@@ -406,7 +460,7 @@ export const CheckoutView: React.FC = () => {
         subtotal: orderSubtotal,
         total: orderTotal,
         estimatedPreparationMinutes: '5-10',
-        instructions: instructions.trim() || undefined,
+        instructions: safeInstructions,
       });
 
       recordPlacedOrder(newOrder.id);
@@ -418,7 +472,12 @@ export const CheckoutView: React.FC = () => {
     } catch (err: any) {
       console.error('Error committing gateway verified order:', err);
       isCommittingRef.current = false;
-      setErrorMessage(err?.message || 'Error confirming order. Please contact counter staff.');
+      const msg = err?.message || 'Error confirming order. Please contact counter staff.';
+      setErrorMessage(msg);
+      setOrderErrorDetail({
+        message: `Payment received (${utrString}), but database order creation failed: ${msg}`,
+        onRetry: () => handleGatewayConfirmedPayment(utrString),
+      });
     } finally {
       setIsVerifying(false);
     }
@@ -513,7 +572,51 @@ export const CheckoutView: React.FC = () => {
         </div>
       </div>
 
-      {errorMessage && (
+      {/* Honeypot Bot Trap: invisible to human users, drops automated spam */}
+      <div style={{ display: 'none', position: 'absolute', left: '-9999px' }} aria-hidden="true">
+        <input
+          type="text"
+          name="bot_trap"
+          value={botTrap}
+          onChange={(e) => setBotTrap(e.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
+
+      {/* Actionable Database Order Persistence Retry Banner */}
+      {orderErrorDetail && (
+        <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 shadow-sm space-y-2.5 animate-in fade-in duration-200">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <h4 className="font-black text-xs sm:text-sm text-rose-950">Order Persistence Failed</h4>
+              <p className="text-xs text-rose-800 mt-0.5 leading-relaxed">{orderErrorDetail.message}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOrderErrorDetail(null);
+                orderErrorDetail.onRetry();
+              }}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            >
+              Retry Order Submission
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderErrorDetail(null)}
+              className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {errorMessage && !orderErrorDetail && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">
           {errorMessage}
         </div>

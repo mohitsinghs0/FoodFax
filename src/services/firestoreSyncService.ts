@@ -1086,12 +1086,23 @@ class SupabaseSyncService {
 
     this.startSync();
     try {
-      const query = supabase.from('menu_items').select('*');
+      // Phase 3 SQL Optimization: Select only menu fields and filter by shop_id on server
+      let baseQuery = supabase
+        .from('menu_items')
+        .select('id, shop_id, name, description, price, image, is_veg, is_available, is_bestseller, preparation_time_min, category_id, is_demo, created_at, updated_at');
+
+      if (shopId) {
+        if (slug && slug !== shopId) {
+          baseQuery = baseQuery.or(`shop_id.eq.${shopId},shop_id.eq.${slug}`);
+        } else {
+          baseQuery = baseQuery.eq('shop_id', shopId);
+        }
+      }
 
       const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
         setTimeout(() => resolve({ data: null, error: new Error('Menu query timed out') }), 6000)
       );
-      const { data, error } = await Promise.race([query, timeoutPromise]);
+      const { data, error } = await Promise.race([baseQuery, timeoutPromise]);
 
       if (!error && Array.isArray(data)) {
         // Only strip items explicitly marked as demo in the raw DB row.
@@ -1239,6 +1250,7 @@ class SupabaseSyncService {
         review_text: order.reviewText,
         reviewed_at: order.reviewedAt,
         feedback_tags: order.feedbackTags || [],
+        items: order.items || [],
         is_demo: order.isDemo || false,
         created_at: order.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -1265,10 +1277,10 @@ class SupabaseSyncService {
 
         if (!fallbackSucceeded) {
           console.error('[Supabase] Error saving order to PostgreSQL:', orderError);
-          // If blocked by PostgreSQL RLS, log warning without crashing checkout flow
-          if (!orderError.message?.toLowerCase().includes('row-level security')) {
-            throw orderError;
-          }
+          // Never silently swallow database errors during checkout — surface actionable error
+          throw new Error(
+            `Failed to save order to PostgreSQL: ${orderError.message || 'Database error'}. Code: ${orderError.code || 'UNKNOWN'}`
+          );
         }
       }
 
@@ -1413,16 +1425,22 @@ class SupabaseSyncService {
     }
   }
 
-  public async getOrdersByCustomer(customerId: string): Promise<Order[]> {
+  public async getOrdersByCustomer(customerId: string, limit: number = 25): Promise<Order[]> {
     this.startSync();
     try {
+      // Reuse fresh shops cache instead of executing redundant full database scans
+      const liveShopsPromise = this.cachedShops && (Date.now() - this.lastShopsFetchTime < this.SHOPS_CACHE_TTL_MS)
+        ? Promise.resolve(this.cachedShops)
+        : this.getShops(true);
+
       const [primaryRes, liveShops] = await Promise.all([
         supabase
           .from('orders')
           .select('*, order_items(*), payments(transaction_id, payment_status, paid_at)')
           .eq('customer_id', customerId)
-          .order('created_at', { ascending: false }),
-        this.getShops(true),
+          .order('created_at', { ascending: false })
+          .limit(limit),
+        liveShopsPromise,
       ]);
 
       const validShopSet = new Set<string>();

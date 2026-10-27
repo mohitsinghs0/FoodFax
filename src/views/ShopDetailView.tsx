@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
-import { useCart } from '../context/CartContext';
 import { shopService } from '../services/shopService';
 import { menuService } from '../services/menuService';
 import { Shop, MenuItem, ShopCategory } from '../types';
 import { MenuItemCard } from '../components/shop/MenuItemCard';
-import { VoiceOrderModal } from '../components/shop/VoiceOrderModal';
 import { 
   ArrowLeft, 
   MapPin, 
@@ -22,11 +20,17 @@ import {
   ChevronRight,
   ShieldCheck,
   Check,
-  Mic,
   Bike,
-  AlertTriangle
+  AlertTriangle,
+  Navigation,
+  ExternalLink
 } from 'lucide-react';
-import { calculateDistanceKm, DEFAULT_CUSTOMER_LOCATION } from '../services/geoService';
+import { 
+  calculateDistanceKm, 
+  DEFAULT_CUSTOMER_LOCATION, 
+  resolveShopCoordinates, 
+  buildGoogleMapsDirectionsUrl 
+} from '../services/geoService';
 import { VegBadge } from '../components/common/VegBadge';
 
 interface ShopDetailViewProps {
@@ -36,7 +40,6 @@ interface ShopDetailViewProps {
 export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
   const { navigate, goBack } = useRouter();
   const { isAuthenticated } = useAuth();
-  const { items: cartItems } = useCart();
 
   const [shop, setShop] = useState<Shop | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -47,7 +50,6 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
   const [isSaved, setIsSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -222,6 +224,15 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
     return shop.location?.distanceKm;
   }, [shop]);
 
+  const shopCoords = useMemo(() => {
+    return resolveShopCoordinates(shop);
+  }, [shop]);
+
+  const directionsUrl = useMemo(() => {
+    if (!shop) return 'https://maps.google.com';
+    return buildGoogleMapsDirectionsUrl(shopCoords.latitude, shopCoords.longitude, shop.name);
+  }, [shop, shopCoords]);
+
   if (loading) {
     return (
       <div className="py-24 text-center text-slate-400">
@@ -263,6 +274,7 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
           }
           alt={shop.name}
           className="w-full h-full object-cover opacity-85"
+          loading="lazy"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20" />
 
@@ -376,15 +388,29 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
             )}
           </div>
 
-          {shop.contactPhone && (
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {shop.contactPhone && (
+              <a
+                href={`tel:${shop.contactPhone}`}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold transition-colors flex-1 sm:flex-none shadow-2xs text-xs"
+              >
+                <Phone className="w-3.5 h-3.5 text-orange-500" />
+                <span>{shop.contactPhone}</span>
+              </a>
+            )}
+
             <a
-              href={`tel:${shop.contactPhone}`}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold transition-colors w-full sm:w-auto"
+              href={directionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs transition-all shadow-xs flex-1 sm:flex-none cursor-pointer"
+              title="Get turn-by-turn directions to this stall on Google Maps"
             >
-              <Phone className="w-3.5 h-3.5 text-orange-500" />
-              <span>{shop.contactPhone}</span>
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Directions</span>
+              <ExternalLink className="w-3 h-3 opacity-80" />
             </a>
-          )}
+          </div>
         </div>
       </div>
 
@@ -434,23 +460,10 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            {/* Hands-Free Voice Ordering Button */}
-            <button
-              onClick={() => setIsVoiceModalOpen(true)}
-              className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black shadow-sm shadow-orange-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
-              title="Order items hands-free using your voice"
-            >
-              <Mic className="w-4 h-4 animate-pulse" />
-              <span>Voice Order</span>
-              <span className="text-[9px] uppercase font-bold bg-white/25 px-1 py-0.5 rounded-full">
-                Hands-Free
-              </span>
-            </button>
-
             {/* Veg Toggle */}
             <button
               onClick={() => setOnlyVeg(!onlyVeg)}
-              className={`flex-1 sm:flex-none px-3 py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 onlyVeg
                   ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
                   : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
@@ -513,35 +526,6 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
           )}
         </div>
       </div>
-
-      {/* Floating Hands-Free Voice Order Button (Positioned safely above BottomNav & FloatingCart) */}
-      <button
-        onClick={() => setIsVoiceModalOpen(true)}
-        className={`fixed right-3 sm:right-8 z-30 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white font-black text-xs shadow-xl shadow-orange-600/30 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all cursor-pointer ring-2 sm:ring-3 ring-white/60 backdrop-blur-xs ${
-          cartItems.length > 0
-            ? 'bottom-[calc(9.5rem+env(safe-area-inset-bottom,0px))] md:bottom-24'
-            : 'bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-8'
-        }`}
-        aria-label="Order with voice hands-free"
-        title="Tap to order hands-free with voice"
-      >
-        <span className="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-white" />
-        </span>
-        <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-        <span className="tracking-tight text-xs">Voice Order</span>
-      </button>
-
-      {/* Hands-Free Voice-to-Text Ordering Modal */}
-      {isVoiceModalOpen && (
-        <VoiceOrderModal
-          isOpen={isVoiceModalOpen}
-          onClose={() => setIsVoiceModalOpen(false)}
-          shop={shop}
-          menuItems={menuItems}
-        />
-      )}
     </div>
   );
 };

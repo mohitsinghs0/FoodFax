@@ -85,16 +85,14 @@ export const CancelOrderModal: React.FC<CancelOrderModalProps> = ({
           </button>
         </div>
 
-        {/* Status notice */}
-        <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-xs text-amber-900">
-          <p className="font-bold flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-amber-700" />
-            <span>Order Status: {order.orderStatus}</span>
+        {/* Refund & Status Guarantee Notice */}
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-1">
+          <p className="font-black flex items-center gap-1.5 text-emerald-900">
+            <Clock className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Eligible for 100% Full Refund</span>
           </p>
-          <p className="text-[11px] text-amber-800 mt-1 leading-snug">
-            {order.orderStatus === 'PREPARING'
-              ? 'Notice: The chef has already started cooking. Cancelling now sends an immediate urgent alert to the stall counter.'
-              : 'Cancelling will instantly release your token slot and notify the stall owner.'}
+          <p className="text-[11px] text-emerald-800 leading-relaxed">
+            The stall owner has not accepted this order yet (Status: <strong>PENDING</strong>). Cancelling now automatically claims a full 100% refund of <strong>₹{order.total}</strong> to your account and frees your token slot.
           </p>
         </div>
 

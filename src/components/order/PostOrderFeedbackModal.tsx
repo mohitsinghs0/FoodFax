@@ -3,6 +3,7 @@ import { Star, Sparkles, CheckCircle2, X, MessageSquare, ThumbsUp, Send, Store, 
 import { Order } from '../../types';
 import { orderService } from '../../services/orderService';
 import { notificationService } from '../../services/notificationService';
+import { sanitizeTextInput, isBotDetected } from '../../utils/orderValidation';
 
 interface PostOrderFeedbackModalProps {
   order: Order | null;
@@ -44,6 +45,7 @@ export const PostOrderFeedbackModal: React.FC<PostOrderFeedbackModalProps> = ({
   );
   const [submitting, setSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [botTrap, setBotTrap] = useState('');
 
   useEffect(() => {
     if (order) {
@@ -67,14 +69,16 @@ export const PostOrderFeedbackModal: React.FC<PostOrderFeedbackModalProps> = ({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isBotDetected(botTrap)) return;
     if (rating < 1) return;
 
     setSubmitting(true);
     try {
+      const safeReview = sanitizeTextInput(reviewText);
       const updated = await orderService.submitOrderReview(
         order.id,
         rating,
-        reviewText.trim(),
+        safeReview,
         selectedTags
       );
 
@@ -235,6 +239,18 @@ export const PostOrderFeedbackModal: React.FC<PostOrderFeedbackModalProps> = ({
                   );
                 })}
               </div>
+            </div>
+
+            {/* Honeypot Bot Trap */}
+            <div style={{ display: 'none', position: 'absolute', left: '-9999px' }} aria-hidden="true">
+              <input
+                type="text"
+                name="bot_trap"
+                value={botTrap}
+                onChange={(e) => setBotTrap(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
             </div>
 
             {/* Review Comment Box */}

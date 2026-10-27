@@ -13,7 +13,11 @@ export type AppRoute =
   | 'profile'
   | 'login'
   | 'register'
-  | 'complete-profile';
+  | 'complete-profile'
+  | 'privacy'
+  | 'terms'
+  | 'refunds'
+  | 'not-found';
 
 export interface RouteState {
   name: AppRoute;
@@ -117,7 +121,23 @@ export function parsePath(pathname: string): RouteState {
     return { name: 'complete-profile', path: '/complete-profile', params: { ...params } };
   }
 
-  return { name: 'home', path: '/', params: { ...params } };
+  if (clean === '/privacy') {
+    return { name: 'privacy', path: '/privacy', params: { ...params } };
+  }
+
+  if (clean === '/terms') {
+    return { name: 'terms', path: '/terms', params: { ...params } };
+  }
+
+  if (clean === '/refunds') {
+    return { name: 'refunds', path: '/refunds', params: { ...params } };
+  }
+
+  if (clean === '/' || clean === '') {
+    return { name: 'home', path: '/', params: { ...params } };
+  }
+
+  return { name: 'not-found', path: clean, params: { ...params } };
 }
 
 export const RouterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

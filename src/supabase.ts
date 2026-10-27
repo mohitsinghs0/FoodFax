@@ -16,6 +16,64 @@ const supabaseAnonKey = (
 // NOTE: Service Role Key must NEVER be present or read in client-side code.
 // Client interacts exclusively via authenticated user JWT and anon key.
 
+/**
+ * Asserts that the provided key or current client environment does not contain
+ * a Supabase Service Role Key. Throws an explicit error to prevent accidental
+ * privilege escalation or secret leakage into client bundles.
+ */
+export function assertNoServiceRoleKey(key?: string): void {
+  const checkKey = (candidate: string) => {
+    if (!candidate || typeof candidate !== 'string') return;
+    const lower = candidate.toLowerCase();
+    if (lower.includes('service_role') || lower.includes('servicerole')) {
+      throw new Error(
+        'CRITICAL SECURITY VIOLATION: Supabase service_role key detected in frontend client. ' +
+        'Frontend bundles must strictly only use the public anon key.'
+      );
+    }
+    // Inspect JWT payload if key is structured as a 3-part token
+    const parts = candidate.split('.');
+    if (parts.length === 3) {
+      try {
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        const decoded = typeof atob === 'function' 
+          ? atob(base64) 
+          : (typeof Buffer !== 'undefined' ? Buffer.from(base64, 'base64').toString('utf8') : '');
+        if (decoded) {
+          const payload = JSON.parse(decoded);
+          if (payload?.role === 'service_role') {
+            throw new Error(
+              'CRITICAL SECURITY VIOLATION: JWT with role "service_role" detected in frontend client. ' +
+              'Service role tokens must NEVER be exposed in client code.'
+            );
+          }
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('CRITICAL SECURITY VIOLATION')) {
+          throw err;
+        }
+      }
+    }
+  };
+
+  if (key) {
+    checkKey(key);
+  }
+  if (supabaseAnonKey) {
+    checkKey(supabaseAnonKey);
+  }
+  if (env?.VITE_SUPABASE_SERVICE_ROLE_KEY || env?.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      'CRITICAL SECURITY VIOLATION: VITE_SUPABASE_SERVICE_ROLE_KEY is present in client environment variables. ' +
+      'Remove this secret immediately from your frontend .env files.'
+    );
+  }
+}
+
+// Immediately enforce hygiene at module evaluation time
+assertNoServiceRoleKey(supabaseAnonKey);
+
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
   supabaseUrl.startsWith('http') &&

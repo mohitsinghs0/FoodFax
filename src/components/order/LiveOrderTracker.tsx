@@ -7,7 +7,7 @@ import { shopService } from '../../services/shopService';
 import { useAccessibility } from '../../context/AccessibilityContext';
 import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
-import { isCustomerAuthorizedForOrder, maskPhoneNumber } from '../../utils/orderValidation';
+import { isCustomerAuthorizedForOrder, maskPhoneNumber, canCustomerCancelOrder } from '../../utils/orderValidation';
 import { 
   CheckCircle2, 
   Clock, 
@@ -733,16 +733,25 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
             <span className="truncate">Print Pass</span>
           </button>
 
-          {/* Cancellation Trigger */}
+          {/* Cancellation Trigger & Kitchen Acceptance Lock Notice */}
           {!isCancelled && !isCompleted && (
-            <button
-              onClick={() => setShowCancelModal(true)}
-              className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-colors border border-red-200 focus-visible:ring-2 focus-visible:ring-red-600 active:scale-95"
-              aria-label="Cancel this order"
-            >
-              <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
-              <span>Cancel Order</span>
-            </button>
+            canCustomerCancelOrder(order.orderStatus) ? (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-colors border border-red-200 focus-visible:ring-2 focus-visible:ring-red-600 active:scale-95 cursor-pointer"
+                aria-label="Cancel this order and claim full refund"
+              >
+                <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                <span>Cancel (100% Refund)</span>
+              </button>
+            ) : (
+              <div className="col-span-2 sm:col-span-3 flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 text-slate-600 text-[11px] leading-snug">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 animate-pulse" />
+                <span>
+                  <strong>Kitchen Accepted:</strong> Food preparation has begun. Cancellations and refunds are locked per FoodFax Stall Policy.
+                </span>
+              </div>
+            )
           )}
         </div>
       </section>

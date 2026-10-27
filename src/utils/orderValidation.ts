@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+
 /**
  * Order Validation Utilities
  */
@@ -142,14 +144,25 @@ export function validateUpiUtr(rawUtr: string): {
 }
 
 /**
+ * Determines whether a customer is eligible to cancel an order and claim a full refund.
+ * RULE: Customers can cancel and claim 100% full refund ONLY when the order is PENDING (before shop acceptance).
+ * Once the shop owner accepts the order (ACCEPTED / PREPARING / READY / COMPLETED), cancellations and refunds
+ * are strictly not permitted because food preparation has commenced.
+ */
+export function canCustomerCancelOrder(orderStatus: string | undefined | null): boolean {
+  if (!orderStatus) return false;
+  return String(orderStatus).trim().toUpperCase() === 'PENDING';
+}
+
+/**
  * Validates sequential order fulfillment state transitions.
  * Allowed sequence: PENDING -> ACCEPTED -> PREPARING -> READY -> COMPLETED.
- * Cancellations/Rejections allowed from PENDING, ACCEPTED, or PREPARING.
- * Disallows invalid jumps (e.g., PENDING directly to COMPLETED).
+ * Cancellations/Rejections allowed from PENDING.
+ * Once accepted by shop, customer cancellation is strictly locked.
  */
 export const VALID_ORDER_TRANSITIONS: Record<string, string[]> = {
   PENDING: ['ACCEPTED', 'CANCELLED', 'REJECTED'],
-  ACCEPTED: ['PREPARING', 'CANCELLED', 'REJECTED'],
+  ACCEPTED: ['PREPARING', 'CANCELLED', 'REJECTED'], // Shop/admin can cancel/reject if out of stock
   PREPARING: ['READY', 'CANCELLED'],
   READY: ['COMPLETED'],
   COMPLETED: [],
@@ -159,13 +172,24 @@ export const VALID_ORDER_TRANSITIONS: Record<string, string[]> = {
 
 export function validateOrderStateTransition(
   currentStatus: string,
-  newStatus: string
+  newStatus: string,
+  initiator: 'customer' | 'shop' | 'admin' = 'shop'
 ): { valid: boolean; error?: string } {
   const current = String(currentStatus || '').toUpperCase();
   const next = String(newStatus || '').toUpperCase();
 
   if (current === next) {
     return { valid: true };
+  }
+
+  // Customer cancellation lock: only permitted while PENDING (pre-acceptance)
+  if (next === 'CANCELLED' && initiator === 'customer') {
+    if (current !== 'PENDING') {
+      return {
+        valid: false,
+        error: `Order has already been accepted by the food stall (${current}). Cancellations and refunds are no longer permitted once food preparation begins.`,
+      };
+    }
   }
 
   const allowed = VALID_ORDER_TRANSITIONS[current] || [];
@@ -182,11 +206,28 @@ export function validateOrderStateTransition(
 }
 
 /**
- * Sanitizes input text: strips HTML tags, script injections, and excessive whitespace.
+ * Sanitizes input text using DOMPurify and entity normalization:
+ * strips HTML tags, script injections, javascript: schemes, and excessive whitespace.
  */
 export function sanitizeTextInput(input: string | undefined | null, maxLength = 250): string {
   if (!input) return '';
-  const noHtml = String(input)
+  let raw = String(input);
+
+  // If running in browser DOM environment, run through DOMPurify first
+  try {
+    if (typeof window !== 'undefined') {
+      const purify: any = (DOMPurify as any)?.sanitize
+        ? DOMPurify
+        : typeof (DOMPurify as any) === 'function'
+          ? (DOMPurify as any)(window)
+          : null;
+      if (purify && typeof purify.sanitize === 'function') {
+        raw = purify.sanitize(raw, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+      }
+    }
+  } catch {}
+
+  const noHtml = raw
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]*>?/gm, '')
@@ -194,6 +235,75 @@ export function sanitizeTextInput(input: string | undefined | null, maxLength = 
     .replace(/on\w+=/gi, '')
     .trim();
   return noHtml.slice(0, maxLength);
+}
+
+/**
+ * Bot trap honeypot detector.
+ * Returns true if the invisible bot_trap field is filled with content.
+ */
+export function isBotDetected(botTrapValue?: string | null): boolean {
+  return Boolean(botTrapValue && typeof botTrapValue === 'string' && botTrapValue.trim().length > 0);
+}
+
+/**
+ * Validates price and recalculates item subtotals client-side before triggering payment.
+ * Disallows negative prices, invalid quantities, or NaN totals.
+ */
+export function validatePriceAndSubtotal(
+  items: Array<{ price?: number; quantity?: number; name?: string }>,
+  declaredSubtotal?: number
+): { valid: boolean; error?: string; recalculatedSubtotal: number } {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return { valid: false, error: 'Cart is empty. Please add items from a food stall.', recalculatedSubtotal: 0 };
+  }
+
+  let calculated = 0;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const price = Number(item.price);
+    const qty = Number(item.quantity);
+
+    if (isNaN(price) || price < 0) {
+      return {
+        valid: false,
+        error: `Item "${item.name || `Item ${i + 1}`}" has an invalid price: ₹${item.price}`,
+        recalculatedSubtotal: 0,
+      };
+    }
+    if (isNaN(qty) || qty <= 0) {
+      return {
+        valid: false,
+        error: `Item "${item.name || `Item ${i + 1}`}" has an invalid quantity: ${item.quantity}`,
+        recalculatedSubtotal: 0,
+      };
+    }
+
+    calculated += price * qty;
+  }
+
+  // Round to 2 decimal places to avoid floating point precision quirks
+  calculated = Math.round(calculated * 100) / 100;
+
+  if (declaredSubtotal !== undefined) {
+    const declared = Number(declaredSubtotal);
+    if (isNaN(declared) || declared < 0) {
+      return {
+        valid: false,
+        error: `Declared subtotal is invalid: ₹${declaredSubtotal}`,
+        recalculatedSubtotal: calculated,
+      };
+    }
+    // Disallow mismatch between declared subtotal and recalculated item sum
+    if (Math.abs(declared - calculated) > 1.0) {
+      return {
+        valid: false,
+        error: `Subtotal mismatch: cart subtotal (₹${declared}) does not match item sum (₹${calculated}).`,
+        recalculatedSubtotal: calculated,
+      };
+    }
+  }
+
+  return { valid: true, recalculatedSubtotal: calculated };
 }
 
 /**
@@ -255,4 +365,115 @@ export function isCustomerAuthorizedForOrder(
 
   return false;
 }
+
+/**
+ * Platform Merchant UPI Invariants & Canonical Deep Link Generators
+ */
+export const PLATFORM_UPI_ID = 'bharatpe2e0p0d8x5a59798@unitype';
+export const PLATFORM_MERCHANT_NAME = 'Mohit Santosh Singh';
+
+export interface CanonicalUpiParams {
+  pa: string;
+  pn: string;
+  am: number | string;
+  tr: string;
+  tn: string;
+}
+
+/**
+ * Builds standard NPCI-compliant UPI URI with strict RFC 3986 percent-encoding (%20 instead of +).
+ * Plus (+) characters in payee name or note cause Google Pay "Could not load banking name" failures.
+ */
+export function buildCanonicalUpiUri(params: CanonicalUpiParams): string {
+  const pa = String(params.pa || PLATFORM_UPI_ID).trim();
+  const pn = String(params.pn || PLATFORM_MERCHANT_NAME).trim();
+  const am = Number(params.am || 0).toFixed(2);
+  const tr = String(params.tr || '').trim();
+  const tn = String(params.tn || `FoodFax Order ${tr}`).trim();
+
+  const queryParts = [
+    `pa=${encodeURIComponent(pa)}`,
+    `pn=${encodeURIComponent(pn)}`,
+    `am=${am}`,
+    'cu=INR',
+    `tn=${encodeURIComponent(tn)}`,
+    `tr=${encodeURIComponent(tr)}`,
+  ];
+
+  return `upi://pay?${queryParts.join('&')}`;
+}
+
+export function buildTezGpayUri(params: CanonicalUpiParams): string {
+  const base = buildCanonicalUpiUri(params);
+  return base.replace(/^upi:\/\/pay\?/, 'tez://upi/pay?');
+}
+
+export function buildPhonePeUri(params: CanonicalUpiParams): string {
+  const base = buildCanonicalUpiUri(params);
+  return base.replace(/^upi:\/\/pay\?/, 'phonepe://pay?');
+}
+
+export function buildPaytmUri(params: CanonicalUpiParams): string {
+  const base = buildCanonicalUpiUri(params);
+  return base.replace(/^upi:\/\/pay\?/, 'paytmmp://pay?');
+}
+
+/**
+ * Normalizes gateway and webhook payment statuses into canonical FoodFax states.
+ */
+export function normalizePaymentStatus(rawStatus?: string | null): 'WAITING' | 'PAID' | 'REJECTED' | 'EXPIRED' {
+  const normalized = String(rawStatus || '').toLowerCase().trim();
+  if (['success', 'paid', 'completed'].includes(normalized)) {
+    return 'PAID';
+  }
+  if (['failed', 'rejected', 'error', 'declined'].includes(normalized)) {
+    return 'REJECTED';
+  }
+  if (['expired', 'timedout'].includes(normalized)) {
+    return 'EXPIRED';
+  }
+  return 'WAITING';
+}
+
+/**
+ * Sanitizes gateway order creation response to guarantee customer always pays
+ * the verified platform merchant (Mohit Santosh Singh / BharatPe) and prevents
+ * third-party aliases like "FoodAds" with missing bank registrations from breaking Google Pay.
+ */
+export function sanitizeCheckoutUpiData(
+  currentData: {
+    paymentId: string;
+    orderId: string;
+    amount: number;
+    qrCode: string;
+    upiLink: string;
+    payUrl?: string;
+    expiresAt: string;
+    status: string;
+  },
+  gatewayResponse: any,
+  originalGrandTotal: number
+): {
+  paymentId: string;
+  orderId: string;
+  amount: number;
+  qrCode: string;
+  upiLink: string;
+  payUrl?: string;
+  expiresAt: string;
+  status: string;
+} {
+  return {
+    ...currentData,
+    paymentId: gatewayResponse?.paymentId || gatewayResponse?.payment_id || currentData.paymentId,
+    // Preserve canonical platform QR code & UPI links to avoid third-party "FoodAds" errors
+    qrCode: currentData.qrCode,
+    upiLink: currentData.upiLink,
+    payUrl: currentData.payUrl,
+    expiresAt: gatewayResponse?.expires_at || gatewayResponse?.expiresAt || currentData.expiresAt,
+    status: gatewayResponse?.status || currentData.status,
+    amount: originalGrandTotal,
+  };
+}
+
 

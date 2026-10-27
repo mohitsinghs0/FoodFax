@@ -231,9 +231,18 @@ CREATE TABLE IF NOT EXISTS public.payments (
 
 ## 8. Common Payment Issues & Fixes (Troubleshooting)
 
-### Issue A: Google Pay shows *"Could not load banking name"* or *"Cannot pay with this QR code"*
-- **Cause:** UPI URI me spaces ko `+` encode kiya gaya tha ya invalid non-registered merchant VPA tha.
-- **Fix:** Hamesha platform merchant `bharatpe2e0p0d8x5a59798@unitype` use karein aur URI query me percent-encoding (`%20`) ensure karein.
+### Issue A: Google Pay shows *"Could not load banking name"* or *"Cannot pay with this QR code: No payment account registered on Google Pay"* (or Payee appears as *"Paying FoodAds"*)
+- **Exact Root Cause Breakdown:**
+  1. **Gateway Overwrite Glitch:** Jab checkout modal open hota tha, pehle instant canonical QR generate hota tha. Lekin background me UPIQRPay gateway API (`/order/create`) call hoti thi. UPIQRPay apne default unlinked merchant account ka naam **"FoodAds"** return karta tha jisme spaces ko `+` encode kiya gaya tha (`Order+ord-1792776849858-260`).
+  2. **Unregistered VPA in Google Pay:** UPIQRPay ka jo default QR/UPI link tha (`foodads@upi`), wo Google Pay par registered merchant bank account nahi tha. Is wajah se jab customer scan karta tha, Google Pay error deta tha: *"Cannot pay with this QR code: No payment account registered on Google Pay"*.
+  3. **Plus Sign Syntax Malformation:** URL me `+` signs (`Order+ord-...`) hone se Google Pay banking name fetch nahi kar pata tha aur *"Could not load banking name"* screen aati thi.
+- **Architectural Solution & Permanent Fix:**
+  - **`sanitizeCheckoutUpiData()` Guard:** Client checkout flow me `sanitizeCheckoutUpiData` implement kiya gaya hai. Gateway API se sirf `payment_id` liya jata hai background polling ke liye, jabki customer ko dikhaya jaane wala QR code aur UPI deep links **permanently locked** rehte hain Platform Merchant:
+    - **Merchant Name:** `Mohit Santosh Singh` (Payee Name `pn`)
+    - **Merchant UPI ID:** `bharatpe2e0p0d8x5a59798@unitype` (Payee VPA `pa`)
+    - **Encoding:** Strict RFC 3986 percent-encoding (`%20`), kabhi bhi `+` use nahi hota.
+  - **Zero Third-Party Alias Overwrite:** Third-party gateway ka koi bhi unverified `qr_code` ya `upi_link` screen par render nahi hoga. Customer seedha Mohit Santosh Singh ke BharatPe verified account par pay karta hai.
+  - **Self-Transfer NPCI Security Policy:** Agar shop owner / developer apne hi usi Google Pay account se payment test karega jisme unka recipient bank link hai, toh bank declines de sakta hai (*"Self-Transfer not allowed"*). Testing ke liye hamesha alag family/friend UPI account use karein.
 
 ### Issue B: Google Pay shows *"Payment to this receiver was declined. To protect your money..."*
 - **Cause:** NPCI fraud warning trigger hoti hai jab:
@@ -261,8 +270,15 @@ Payment security and formatting automated test suite se protected hai:
 npm test
 ```
 
-### Active Payment Test Cases in `src/utils/security.test.ts`:
-- `assertValidOrderSubmission`: Rejects negative prices, zero quantities, and mismatched item subtotals.
-- `validateUpiUtr`: Validates 12 numeric digits, rejects patterns (`123456`, `111111`), rejects leading zeros.
-- `Central Merchant UPI & Google Pay URI Standards`: Validates `PLATFORM_UPI_ID`, `PLATFORM_MERCHANT_NAME`, and percent-encoded URI string construction.
+### Active Payment Test Suites:
+1. `src/services/paymentService.test.ts`:
+   - Enforces platform merchant identity (`bharatpe2e0p0d8x5a59798@unitype`, `Mohit Santosh Singh`).
+   - Verifies RFC 3986 percent-encoding (`%20`, no `+`).
+   - Enforces `sanitizeCheckoutUpiData` to prevent "FoodAds" and third-party QR overwrite.
+   - Normalizes all gateway status strings (`PAID`, `WAITING`, `REJECTED`, `EXPIRED`).
+   - Validates 12-digit NPCI bank UTRs.
+2. `src/utils/security.test.ts`:
+   - `assertValidOrderSubmission`: Rejects negative prices, zero quantities, and mismatched item subtotals.
+   - `validateUpiUtr`: Validates 12 numeric digits, rejects patterns (`123456`, `111111`), rejects leading zeros.
+   - `Central Merchant UPI & Google Pay URI Standards`: Validates `PLATFORM_UPI_ID`, `PLATFORM_MERCHANT_NAME`, and percent-encoded URI string construction.
 

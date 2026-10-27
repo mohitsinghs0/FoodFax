@@ -88,8 +88,8 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
 
       {/* Right Image + Action Stepper */}
       <div className="relative w-22 sm:w-28 flex flex-col items-center justify-between flex-shrink-0">
-        {/* Item Image */}
-        <div className="relative w-22 h-20 sm:w-28 sm:h-24 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
+        {/* Item Image with explicit aspect-ratio and lazy loading to prevent CLS */}
+        <div className="relative w-22 h-20 sm:w-28 sm:h-24 aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
           <img
             src={item.image?.trim() ? item.image : DEFAULT_MENU_IMG}
             alt={item.name}
@@ -99,7 +99,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
             loading="lazy"
           />
           {!item.isAvailable && (
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px] flex items-center justify-center p-1 text-center">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex items-center justify-center p-1 text-center">
               <span className="text-[10px] font-black uppercase text-white tracking-wider">
                 Sold Out
               </span>
@@ -107,12 +107,12 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
           )}
         </div>
 
-        {/* Add / Stepper Button */}
+        {/* Add / Stepper Button - Outdoor Sunlight Accessible >= 48px Touch Target */}
         <div className="w-full flex justify-center -mt-3.5 z-10">
           {!item.isAvailable ? (
             <button
               disabled
-              className="px-3 sm:px-4 py-1.5 rounded-xl bg-slate-200 text-slate-400 text-xs font-bold cursor-not-allowed border border-slate-300 whitespace-nowrap"
+              className="min-h-[44px] min-w-[48px] px-3 sm:px-4 py-2 rounded-xl bg-slate-200 text-slate-500 text-xs font-bold cursor-not-allowed border border-slate-300 whitespace-nowrap"
             >
               Unavailable
             </button>
@@ -121,35 +121,35 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
               id={`add-btn-${item.id}`}
               onClick={handleAdd}
               disabled={!shop.isOpen}
-              className={`flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 touch-manipulation ${
+              className={`flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] min-w-[72px] sm:min-w-[80px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 touch-manipulation ${
                 shop.isOpen
-                  ? 'bg-white text-orange-600 border border-orange-200 hover:bg-orange-50 hover:border-orange-300 shadow-orange-500/10'
+                  ? 'bg-white text-orange-700 border-2 border-orange-400 hover:bg-orange-50 hover:border-orange-500 shadow-orange-500/15'
                   : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
               }`}
             >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Add</span>
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span className="tracking-wide uppercase text-[11px] font-black">Add</span>
             </button>
           ) : (
-            <div className="flex items-center justify-between bg-orange-600 text-white rounded-xl shadow-md shadow-orange-600/25 border border-orange-500 px-1 py-0.5 w-22 sm:w-24 touch-manipulation">
+            <div className="flex items-center justify-between min-h-[44px] sm:min-h-[48px] bg-orange-600 text-white rounded-xl shadow-lg shadow-orange-600/30 border border-orange-500 px-1 py-0.5 w-24 sm:w-28 touch-manipulation">
               <button
                 id={`decrement-${item.id}`}
                 onClick={handleDecrement}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-700 active:scale-90 transition-transform"
+                className="min-h-[44px] min-w-[40px] flex items-center justify-center rounded-lg hover:bg-orange-700 active:scale-90 transition-transform"
                 aria-label="Decrease quantity"
               >
-                <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                <Minus className="w-4 h-4 stroke-[3]" />
               </button>
-              <span className="font-extrabold text-xs tracking-tight">
+              <span className="font-black text-sm tracking-tight px-1">
                 {quantity}
               </span>
               <button
                 id={`increment-${item.id}`}
                 onClick={handleIncrement}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-700 active:scale-90 transition-transform"
+                className="min-h-[44px] min-w-[40px] flex items-center justify-center rounded-lg hover:bg-orange-700 active:scale-90 transition-transform"
                 aria-label="Increase quantity"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <Plus className="w-4 h-4 stroke-[3]" />
               </button>
             </div>
           )}

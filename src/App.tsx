@@ -19,20 +19,35 @@ import { ActiveOrderBanner } from './components/common/ActiveOrderBanner';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 
-// Customer Views
+// Primary Eager Customer View (Instant First Contentful Paint)
 import { HomeView } from './views/HomeView';
-import { SearchView } from './views/SearchView';
-import { ShopsView } from './views/ShopsView';
-import { ShopDetailView } from './views/ShopDetailView';
-import { CartView } from './views/CartView';
-import { CheckoutView } from './views/CheckoutView';
-import { OrderTrackerView } from './views/OrderTrackerView';
-import { OrdersHistoryView } from './views/OrdersHistoryView';
-import { SavedShopsView } from './views/SavedShopsView';
-import { ProfileView } from './views/ProfileView';
-import { LoginView } from './views/LoginView';
-import { RegisterView } from './views/RegisterView';
-import { CompleteProfileView } from './views/CompleteProfileView';
+
+// On-Demand Lazy-Loaded Customer Views (Progressive Loading & Route Splitting)
+const SearchView = React.lazy(() => import('./views/SearchView').then(m => ({ default: m.SearchView })));
+const ShopsView = React.lazy(() => import('./views/ShopsView').then(m => ({ default: m.ShopsView })));
+const ShopDetailView = React.lazy(() => import('./views/ShopDetailView').then(m => ({ default: m.ShopDetailView })));
+const CartView = React.lazy(() => import('./views/CartView').then(m => ({ default: m.CartView })));
+const CheckoutView = React.lazy(() => import('./views/CheckoutView').then(m => ({ default: m.CheckoutView })));
+const OrderTrackerView = React.lazy(() => import('./views/OrderTrackerView').then(m => ({ default: m.OrderTrackerView })));
+const OrdersHistoryView = React.lazy(() => import('./views/OrdersHistoryView').then(m => ({ default: m.OrdersHistoryView })));
+const SavedShopsView = React.lazy(() => import('./views/SavedShopsView').then(m => ({ default: m.SavedShopsView })));
+const ProfileView = React.lazy(() => import('./views/ProfileView').then(m => ({ default: m.ProfileView })));
+const LoginView = React.lazy(() => import('./views/LoginView').then(m => ({ default: m.LoginView })));
+const RegisterView = React.lazy(() => import('./views/RegisterView').then(m => ({ default: m.RegisterView })));
+const CompleteProfileView = React.lazy(() => import('./views/CompleteProfileView').then(m => ({ default: m.CompleteProfileView })));
+const PrivacyPolicyView = React.lazy(() => import('./views/PrivacyPolicyView').then(m => ({ default: m.PrivacyPolicyView })));
+const TermsOfServiceView = React.lazy(() => import('./views/TermsOfServiceView').then(m => ({ default: m.TermsOfServiceView })));
+const RefundPolicyView = React.lazy(() => import('./views/RefundPolicyView').then(m => ({ default: m.RefundPolicyView })));
+const NotFoundView = React.lazy(() => import('./views/NotFoundView').then(m => ({ default: m.NotFoundView })));
+
+const RouteSuspenseFallback: React.FC = () => (
+  <div className="py-12 px-4 max-w-lg mx-auto text-center space-y-3 animate-in fade-in duration-150">
+    <div className="w-9 h-9 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+    <p className="text-xs font-semibold text-slate-500">Loading screen...</p>
+  </div>
+);
+
+import { Footer } from './components/common/Footer';
 import { firestoreSync } from './services/firestoreSyncService';
 
 const AppContent: React.FC = () => {
@@ -54,6 +69,33 @@ const AppContent: React.FC = () => {
 
     return () => unsub();
   }, []);
+
+  // Dynamic SEO & Page Titles based on Active Route
+  React.useEffect(() => {
+    if (!route) return;
+    const titles: Record<string, string> = {
+      home: 'FoodFax - Order Fresh Street Food & Meals in Vasai-Virar',
+      search: 'Search Street Food Dishes & Stalls | FoodFax',
+      shops: 'Local Street Food Stalls & Tapris in Vasai-Virar | FoodFax',
+      'shop-detail': 'Stall Menu & Live Token Queue | FoodFax',
+      cart: 'Your Order Cart | FoodFax',
+      checkout: 'Checkout & UPI Payment | FoodFax',
+      'order-tracker': 'Live Kitchen Token Queue Tracker | FoodFax',
+      'order-history': 'My Past Orders & Receipts | FoodFax',
+      saved: 'Saved Street Food Stalls | FoodFax',
+      profile: 'Customer Profile & Settings | FoodFax',
+      login: 'Sign In to FoodFax',
+      register: 'Create FoodFax Account',
+      'complete-profile': 'Complete Your Profile | FoodFax',
+      privacy: 'Privacy Policy | FoodFax - Street Food in Vasai-Virar',
+      terms: 'Terms of Service | FoodFax - Street Food in Vasai-Virar',
+      refunds: 'Refund & Cancellation Policy | FoodFax',
+      'not-found': 'Page Not Found (404) | FoodFax',
+    };
+    if (titles[route.name]) {
+      document.title = titles[route.name];
+    }
+  }, [route]);
 
   // Render customer views
   const renderCustomerView = () => {
@@ -89,8 +131,16 @@ const AppContent: React.FC = () => {
         return <RegisterView />;
       case 'complete-profile':
         return <CompleteProfileView />;
+      case 'privacy':
+        return <PrivacyPolicyView />;
+      case 'terms':
+        return <TermsOfServiceView />;
+      case 'refunds':
+        return <RefundPolicyView />;
+      case 'not-found':
+        return <NotFoundView />;
       default:
-        return <HomeView onOpenQRScanner={() => setIsQRScannerOpen(true)} />;
+        return <NotFoundView />;
     }
   };
 
@@ -121,8 +171,13 @@ const AppContent: React.FC = () => {
 
       {/* Main Page Area */}
       <main id="main-content" tabIndex={-1} className="flex-1 w-full max-w-7xl mx-auto focus:outline-none overflow-x-hidden min-w-0">
-        {renderCustomerView()}
+        <React.Suspense fallback={<RouteSuspenseFallback />}>
+          {renderCustomerView()}
+        </React.Suspense>
       </main>
+
+      {/* Footer with Legal Policies & Compliance */}
+      <Footer />
 
       {/* Floating Quick Cart Bar (Hidden in Cart, Checkout, and Auth Views) */}
       {!isAuthPage && <FloatingCartBar />}

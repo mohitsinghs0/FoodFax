@@ -12,6 +12,41 @@ const IN_MEMORY_REVIEWS: ShopReview[] = [];
 
 let memoryStoredShopsCache: Shop[] | null = null;
 
+// Sub-50ms API Caching (5-minute TTL) for stall details
+export const STALL_CACHE_TTL_MS = 5 * 60 * 1000;
+interface StallCacheEntry {
+  data: Shop;
+  timestamp: number;
+}
+const STALL_DETAILS_CACHE = new Map<string, StallCacheEntry>();
+
+// Location & Radius Keyed Listing Cache (3-minute TTL)
+export const LISTING_CACHE_TTL_MS = 3 * 60 * 1000;
+interface ListingCacheEntry {
+  data: Shop[];
+  timestamp: number;
+}
+const NEARBY_LISTING_CACHE = new Map<string, ListingCacheEntry>();
+
+export function getListingCacheKey(
+  radiusKm?: number,
+  category?: string,
+  userLocation?: { latitude: number; longitude: number }
+): string {
+  const lat = userLocation?.latitude ? userLocation.latitude.toFixed(3) : 'def_lat';
+  const lng = userLocation?.longitude ? userLocation.longitude.toFixed(3) : 'def_lng';
+  return `${lat}:${lng}:r${radiusKm ?? 'all'}:c${category ?? 'all'}`;
+}
+
+export function clearStallCache(shopId?: string): void {
+  if (shopId) {
+    STALL_DETAILS_CACHE.delete(shopId.toLowerCase());
+  } else {
+    STALL_DETAILS_CACHE.clear();
+  }
+  NEARBY_LISTING_CACHE.clear();
+}
+
 const SHOP_LISTENERS = new Map<string, Set<(shop: Shop) => void>>();
 const ALL_SHOPS_LISTENERS = new Set<(shops: Shop[]) => void>();
 
@@ -203,6 +238,13 @@ export const shopService = {
     userLocation?: { latitude: number; longitude: number },
     isRealUser?: boolean
   ): Promise<Shop[]> {
+    // 0. Smart Listing Cache Lookup: return instant cached results if fresh
+    const cacheKey = getListingCacheKey(undefined, `${categoryId || 'all'}:${query || ''}`, userLocation);
+    const cachedListing = NEARBY_LISTING_CACHE.get(cacheKey);
+    if (cachedListing && (Date.now() - cachedListing.timestamp < LISTING_CACHE_TTL_MS)) {
+      return cachedListing.data;
+    }
+
     let shops: Shop[] = [];
     const deletedRaw = typeof window !== 'undefined' ? localStorage.getItem('foodflow_deleted_shops') : null;
     const deletedSet = new Set<string>(deletedRaw ? JSON.parse(deletedRaw) : []);
@@ -272,6 +314,9 @@ export const shopService = {
       );
     }
 
+    // Warm smart listing cache
+    NEARBY_LISTING_CACHE.set(cacheKey, { data: shops, timestamp: Date.now() });
+
     return shops;
   },
 
@@ -301,6 +346,14 @@ export const shopService = {
       return null;
     }
 
+    // 0. Sub-50ms Cache Lookup: check if stall is cached and fresh (< 5 mins)
+    const cachedEntry = STALL_DETAILS_CACHE.get(cleanId);
+    if (cachedEntry && Date.now() - cachedEntry.timestamp < STALL_CACHE_TTL_MS) {
+      if (!deletedSet.has(cachedEntry.data.id) && !isShopSuspendedOrKycPending(cachedEntry.data)) {
+        return cachedEntry.data;
+      }
+    }
+
     // 1. If Supabase is configured, strictly use live database
     if (isSupabaseConfigured) {
       try {
@@ -313,6 +366,10 @@ export const shopService = {
           !deletedSet.has(remoteShop.id) &&
           !isShopSuspendedOrKycPending(remoteShop)
         ) {
+          // Warm cache
+          STALL_DETAILS_CACHE.set(cleanId, { data: remoteShop, timestamp: Date.now() });
+          if (remoteShop.id) STALL_DETAILS_CACHE.set(remoteShop.id.toLowerCase(), { data: remoteShop, timestamp: Date.now() });
+          if (remoteShop.slug) STALL_DETAILS_CACHE.set(remoteShop.slug.toLowerCase(), { data: remoteShop, timestamp: Date.now() });
           return remoteShop;
         }
         return null;
