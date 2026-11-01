@@ -691,10 +691,18 @@ class AuthService {
             supabase.from('customers').select('*').ilike('email', cleanEmail).limit(5),
           ]);
           if (!usersRes.error && usersRes.data && usersRes.data.length > 0) {
-            dbUser = usersRes.data.find((u) => u.role === 'owner') || usersRes.data[0];
+            const pwdMatchUser = usersRes.data.find((u) => {
+              const p = u.password || u.password_hash || u.pass || u.pwd;
+              return doesPasswordMatch(p);
+            });
+            dbUser = pwdMatchUser || usersRes.data.find((u) => u.role === 'owner') || usersRes.data[0];
           }
           if (!custRes.error && custRes.data && custRes.data.length > 0) {
-            dbCustomer = custRes.data[0];
+            const pwdMatchCust = custRes.data.find((c) => {
+              const p = c.password || c.password_hash;
+              return doesPasswordMatch(p);
+            });
+            dbCustomer = pwdMatchCust || custRes.data[0];
           }
         } else if (last10.length === 10) {
           const [usersRes, custRes] = await Promise.all([
@@ -702,7 +710,11 @@ class AuthService {
             supabase.from('customers').select('*').ilike('phone', `%${last10}%`).limit(5),
           ]);
           if (!usersRes.error && usersRes.data && usersRes.data.length > 0) {
-            dbUser = usersRes.data.find((u) => u.role === 'owner') || usersRes.data[0];
+            const pwdMatchUser = usersRes.data.find((u) => {
+              const p = u.password || u.password_hash || u.pass || u.pwd;
+              return doesPasswordMatch(p);
+            });
+            dbUser = pwdMatchUser || usersRes.data.find((u) => u.role === 'owner') || usersRes.data[0];
           } else {
             // Also check synthetic email `<last10>@foodflow.user` in users table
             const { data: synthUsers } = await supabase
@@ -715,7 +727,11 @@ class AuthService {
             }
           }
           if (!custRes.error && custRes.data && custRes.data.length > 0) {
-            dbCustomer = custRes.data[0];
+            const pwdMatchCust = custRes.data.find((c) => {
+              const p = c.password || c.password_hash;
+              return doesPasswordMatch(p);
+            });
+            dbCustomer = pwdMatchCust || custRes.data[0];
           }
         }
       } catch (err) {
@@ -730,11 +746,10 @@ class AuthService {
       const userStoredPass = dbUser ? (dbUser.password || dbUser.password_hash || dbUser.pass || dbUser.pwd) : null;
       const custStoredPass = dbCustomer ? (dbCustomer.password || dbCustomer.password_hash) : null;
 
-      let passwordValid = false;
+      const userPassMatches = doesPasswordMatch(userStoredPass);
+      const custPassMatches = doesPasswordMatch(custStoredPass);
 
-      if (doesPasswordMatch(userStoredPass) || doesPasswordMatch(custStoredPass)) {
-        passwordValid = true;
-      }
+      let passwordValid = userPassMatches || custPassMatches;
 
       // If no stored password matched yet, verify via Supabase Auth (auth.users)
       if (!passwordValid && isSupabaseConfigured) {
@@ -800,16 +815,20 @@ class AuthService {
         }
       }
 
-      // If user is an owner in `users` table, return owner profile + business
-      if (dbUser && dbUser.role === 'owner') {
+      // If user is an owner in `users` table AND owner password matched, return owner profile + business
+      if (dbUser && dbUser.role === 'owner' && userPassMatches) {
         const ownerProfile = this.mapDbUserToAuthUser(dbUser, rawInput);
         const business = await this.fetchOwnerShop(dbUser.id, ownerProfile.shopId);
         this.persistSession(ownerProfile, business);
         return { user: ownerProfile, business: business || undefined };
       }
 
-      // Otherwise return customer profile (preferring `dbCustomer` or `dbUser`)
-      const userProfile = dbCustomer
+      // Otherwise return customer profile (preferring `dbCustomer` if its password matched)
+      const userProfile = (dbCustomer && custPassMatches)
+        ? this.mapCustomerRowToAuthUser(dbCustomer, rawInput)
+        : (dbUser && userPassMatches)
+        ? this.mapDbUserToAuthUser(dbUser, rawInput)
+        : dbCustomer
         ? this.mapCustomerRowToAuthUser(dbCustomer, rawInput)
         : this.mapDbUserToAuthUser(dbUser, rawInput);
 

@@ -183,7 +183,7 @@ const AppContent: React.FC = () => {
       {!isAuthPage && <FloatingCartBar />}
 
       {/* Persistent Bottom Mobile Navigation Bar (Hidden in Auth Views) */}
-      {!isAuthPage && <BottomNav />}
+      {!isAuthPage && <BottomNav onOpenQRScanner={() => setIsQRScannerOpen(true)} />}
 
       {/* Accessibility Preferences Modal */}
       <AccessibilityModal />

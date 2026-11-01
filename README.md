@@ -4,6 +4,20 @@
 
 ---
 
+## 📚 Technical Specifications & Documentation
+
+All architectural specifications, operating manuals, and guides are organized under [`docs/`](docs/):
+
+| Specification | Location | Summary |
+|---|---|---|
+| 🤖 **AI Agent Guidelines** | [`docs/agent/agent.md`](docs/agent/agent.md) | Master operating rules, constraints, and architecture for AI agents |
+| 🗄️ **Database Architecture** | [`docs/database/database.md`](docs/database/database.md) | PostgreSQL schema, tables, foreign keys, anti-egress rules |
+| 🔑 **Supabase Configuration** | [`docs/database/readme-supa.md`](docs/database/readme-supa.md) | Supabase project credentials, endpoints, and keys |
+| 💳 **Payment Gateway Manual** | [`docs/payment/payment.md`](docs/payment/payment.md) | UPI operations, BharatPe merchant model, webhook specs |
+| 🚀 **Local Setup Guide** | [`docs/setup/setup.md`](docs/setup/setup.md) | Self-hosted Supabase Docker stack and dev setup |
+
+---
+
 ## 📌 All Key Features
 
 ### 1. 📊 Recharts Monthly & Daily Spending Trends (Orders History)

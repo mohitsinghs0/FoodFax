@@ -30,27 +30,27 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
   return (
     <div
       id={`menu-item-${item.id}`}
-      className={`relative bg-white rounded-2xl border p-3 sm:p-4 transition-all flex gap-3 sm:gap-4 overflow-hidden min-w-0 ${
+      className={`relative bg-white rounded-2xl border p-3.5 sm:p-4.5 transition-all duration-200 flex gap-3.5 sm:gap-4 overflow-hidden min-w-0 ${
         item.isAvailable
-          ? 'border-slate-200/90 hover:border-orange-200 hover:shadow-xs'
-          : 'border-slate-200/60 bg-slate-50/60 opacity-75'
+          ? 'border-slate-200/70 hover:border-slate-300 shadow-card hover:shadow-card-hover'
+          : 'border-slate-200/60 bg-slate-50/70 opacity-75'
       }`}
     >
       {/* Left Details */}
       <div className="flex-1 min-w-0 flex flex-col justify-between">
         <div>
           {/* Badges row: Veg, Bestseller */}
-          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
             <VegBadge isVeg={item.isVeg} size="sm" />
             {item.isBestseller && (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-tight bg-amber-50 text-amber-700 border border-amber-200/60 flex-shrink-0">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-tight bg-amber-50 text-amber-800 border border-amber-200/60 flex-shrink-0">
                 <Flame className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                 Popular
               </span>
             )}
             {item.preparationTimeMin && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-500 flex-shrink-0">
-                <Clock className="w-2.5 h-2.5" />
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 flex-shrink-0">
+                <Clock className="w-3 h-3 text-slate-400" />
                 ~{item.preparationTimeMin}m
               </span>
             )}
@@ -66,7 +66,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
           </h4>
 
           {/* Price */}
-          <p className="font-extrabold text-sm sm:text-base text-slate-900 mt-1 tracking-tight">
+          <p className="font-extrabold text-sm sm:text-base text-slate-900 mt-1 tracking-tight tabular-nums">
             ₹{item.price}
           </p>
 
@@ -79,7 +79,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
         {/* Unavailable label if out of stock */}
         {!item.isAvailable && (
           <div className="mt-2">
-            <span className="inline-block text-[10px] sm:text-[11px] font-bold text-rose-600 uppercase tracking-wider bg-rose-50 px-2 py-0.5 rounded border border-rose-200/60">
+            <span className="inline-block text-[10px] sm:text-[11px] font-bold text-rose-600 uppercase tracking-wider bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200/60">
               Currently Unavailable
             </span>
           </div>
@@ -89,7 +89,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
       {/* Right Image + Action Stepper */}
       <div className="relative w-22 sm:w-28 flex flex-col items-center justify-between flex-shrink-0">
         {/* Item Image with explicit aspect-ratio and lazy loading to prevent CLS */}
-        <div className="relative w-22 h-20 sm:w-28 sm:h-24 aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
+        <div className="relative w-22 h-20 sm:w-28 sm:h-24 aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 shadow-2xs">
           <img
             src={item.image?.trim() ? item.image : DEFAULT_MENU_IMG}
             alt={item.name}
@@ -112,7 +112,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
           {!item.isAvailable ? (
             <button
               disabled
-              className="min-h-[44px] min-w-[48px] px-3 sm:px-4 py-2 rounded-xl bg-slate-200 text-slate-500 text-xs font-bold cursor-not-allowed border border-slate-300 whitespace-nowrap"
+              className="min-h-[44px] min-w-[48px] px-3 sm:px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold cursor-not-allowed border border-slate-200 whitespace-nowrap"
             >
               Unavailable
             </button>
@@ -121,26 +121,26 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
               id={`add-btn-${item.id}`}
               onClick={handleAdd}
               disabled={!shop.isOpen}
-              className={`flex items-center justify-center gap-1.5 min-h-[44px] sm:min-h-[48px] min-w-[72px] sm:min-w-[80px] px-3.5 sm:px-4 py-2 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 touch-manipulation ${
+              className={`flex items-center justify-center gap-1 min-h-[44px] sm:min-h-[48px] min-w-[76px] sm:min-w-[84px] px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 touch-manipulation ${
                 shop.isOpen
-                  ? 'bg-white text-orange-700 border-2 border-orange-400 hover:bg-orange-50 hover:border-orange-500 shadow-orange-500/15'
+                  ? 'bg-white text-orange-600 border border-orange-300/90 hover:bg-orange-50 hover:border-orange-400 shadow-orange-500/10'
                   : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
               }`}
             >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span className="tracking-wide uppercase text-[11px] font-black">Add</span>
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="tracking-wide uppercase text-[11px] font-bold">Add</span>
             </button>
           ) : (
-            <div className="flex items-center justify-between min-h-[44px] sm:min-h-[48px] bg-orange-600 text-white rounded-xl shadow-lg shadow-orange-600/30 border border-orange-500 px-1 py-0.5 w-24 sm:w-28 touch-manipulation">
+            <div className="flex items-center justify-between min-h-[44px] sm:min-h-[48px] bg-orange-600 text-white rounded-xl shadow-md shadow-orange-600/25 border border-orange-500 px-1 py-0.5 w-24 sm:w-28 touch-manipulation">
               <button
                 id={`decrement-${item.id}`}
                 onClick={handleDecrement}
                 className="min-h-[44px] min-w-[40px] flex items-center justify-center rounded-lg hover:bg-orange-700 active:scale-90 transition-transform"
                 aria-label="Decrease quantity"
               >
-                <Minus className="w-4 h-4 stroke-[3]" />
+                <Minus className="w-4 h-4 stroke-[2.5]" />
               </button>
-              <span className="font-black text-sm tracking-tight px-1">
+              <span className="font-bold text-sm tracking-tight px-1 tabular-nums">
                 {quantity}
               </span>
               <button
@@ -149,7 +149,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, shop }) => {
                 className="min-h-[44px] min-w-[40px] flex items-center justify-center rounded-lg hover:bg-orange-700 active:scale-90 transition-transform"
                 aria-label="Increase quantity"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
+                <Plus className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
           )}

@@ -52,7 +52,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
     return (
       <div
         onClick={handleCardClick}
-        className="group relative bg-white rounded-2xl border border-slate-200/90 hover:border-orange-300 hover:shadow-md transition-all p-3 sm:p-3.5 flex gap-3 sm:gap-3.5 cursor-pointer overflow-hidden min-w-0"
+        className="group relative bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 p-3 sm:p-3.5 flex gap-3 sm:gap-3.5 cursor-pointer overflow-hidden min-w-0"
       >
         {/* Stall Thumbnail */}
         <div className="relative w-20 h-20 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
@@ -76,7 +76,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
           <div>
             <div className="flex items-start justify-between gap-1.5">
               <div className="min-w-0 flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200/50">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200/60">
                   {shop.stallType}
                 </span>
                 <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-orange-600 transition-colors truncate mt-1">
@@ -85,7 +85,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
               </div>
               <button
                 onClick={handleHeartClick}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors flex-shrink-0"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors flex-shrink-0"
                 aria-label={isSaved ? 'Remove from saved' : 'Save stall'}
               >
                 <Heart
@@ -102,8 +102,8 @@ export const ShopCard: React.FC<ShopCardProps> = ({
           </div>
 
           <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 mt-2 min-w-0">
-            <div className="flex items-center gap-1 font-semibold text-slate-900 flex-shrink-0">
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <div className="flex items-center gap-1 font-semibold text-slate-900 flex-shrink-0 bg-amber-50/80 px-1.5 py-0.5 rounded-md border border-amber-200/50">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
               <span>{shop.rating}</span>
               <span className="text-slate-400 text-[10px] sm:text-[11px]">({shop.totalReviews})</span>
             </div>
@@ -126,7 +126,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
   return (
     <div
       onClick={handleCardClick}
-      className="group relative bg-white rounded-2xl border border-slate-200/90 hover:border-orange-300 hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer flex flex-col h-full min-w-0"
+      className="group relative bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 overflow-hidden cursor-pointer flex flex-col h-full min-w-0"
     >
       {/* Stall Hero Image */}
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100">
@@ -137,9 +137,12 @@ export const ShopCard: React.FC<ShopCardProps> = ({
           loading="lazy"
         />
 
+        {/* Subtle gradient vignette at bottom of image for badge contrast */}
+        <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/40 via-black/10 to-transparent pointer-events-none" />
+
         {/* Stall Type Badge */}
         <div className="absolute top-2.5 left-2.5">
-          <span className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-slate-900/80 text-white backdrop-blur-xs shadow-xs">
+          <span className="px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider bg-slate-900/80 text-white backdrop-blur-md shadow-xs ring-1 ring-white/10">
             {shop.stallType}
           </span>
         </div>
@@ -147,7 +150,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
         {/* Open / Closed status pill */}
         <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
           <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 backdrop-blur-md shadow-xs ${
+            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 backdrop-blur-md shadow-xs ${
               shop.isOpen
                 ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
                 : 'bg-rose-950/80 text-rose-300 border border-rose-500/30'
@@ -163,7 +166,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
 
           <button
             onClick={handleHeartClick}
-            className="w-7 h-7 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center text-slate-600 hover:text-rose-500 hover:bg-white shadow-xs transition-colors"
+            className="w-7 h-7 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-slate-600 hover:text-rose-500 hover:bg-white shadow-xs transition-colors"
             aria-label={isSaved ? 'Remove from saved' : 'Save stall'}
           >
             <Heart
@@ -176,7 +179,7 @@ export const ShopCard: React.FC<ShopCardProps> = ({
 
         {/* Fast counter badge */}
         <div className="absolute bottom-2.5 left-2.5">
-          <div className="flex items-center gap-1 bg-white/95 backdrop-blur-xs px-2 py-1 rounded-lg text-slate-800 text-[11px] font-bold shadow-xs">
+          <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-full text-slate-800 text-[11px] font-semibold shadow-xs border border-white/60">
             <Clock className="w-3 h-3 text-orange-600" />
             <span>{shop.preparationTimeMinutes} min prep</span>
           </div>
@@ -190,8 +193,8 @@ export const ShopCard: React.FC<ShopCardProps> = ({
             <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-1 flex-1 min-w-0">
               {shop.name}
             </h3>
-            <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded text-amber-900 text-xs font-bold flex-shrink-0 border border-amber-200/50">
-              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+            <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md text-amber-900 text-xs font-bold flex-shrink-0 border border-amber-200/50">
+              <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
               <span>{shop.rating}</span>
             </div>
           </div>
@@ -200,19 +203,20 @@ export const ShopCard: React.FC<ShopCardProps> = ({
             {shop.tagline}
           </p>
 
-          <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-2 min-w-0">
+          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-2 min-w-0">
             <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
-            <span className="truncate flex-1 min-w-0">{shop.location?.landmark || shop.address || shop.area || shop.stallType}</span>
+            <span className="truncate flex-1 min-w-0 text-slate-500">{shop.location?.landmark || shop.address || shop.area || shop.stallType}</span>
             <span className="flex-shrink-0">•</span>
             <span className="font-semibold text-slate-600 flex-shrink-0">{formatDistance(shop.location?.distanceKm)}</span>
           </div>
         </div>
 
         <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-slate-500 truncate mr-2">
-            {shop.isPureVeg ? '🟢 Pure Veg Stall' : 'Veg & Snacks'}
+          <span className="text-[11px] font-medium text-slate-500 truncate mr-2 flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${shop.isPureVeg ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            {shop.isPureVeg ? 'Pure Veg Stall' : 'Veg & Snacks'}
           </span>
-          <span className="text-xs font-bold text-orange-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 flex-shrink-0">
+          <span className="text-xs font-semibold text-orange-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 flex-shrink-0">
             View Menu →
           </span>
         </div>

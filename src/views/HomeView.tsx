@@ -14,6 +14,7 @@ import {
 import { Shop, ShopCategory, Order } from '../types';
 import { ShopCard } from '../components/shop/ShopCard';
 import { LocationConsentModal } from '../components/common/LocationConsentModal';
+import { ImmersiveHeroStage } from '../components/home/ImmersiveHeroStage';
 import { 
   Search, 
   QrCode, 
@@ -41,7 +42,8 @@ import {
   Zap,
   Filter,
   CheckCircle2,
-  Sliders
+  Sliders,
+  Mic
 } from 'lucide-react';
 
 interface HomeViewProps {
@@ -771,221 +773,92 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
     setDistanceFilter('2km');
   };
 
+  const handleToggleVeg = () => {
+    const next = !onlyVeg;
+    setOnlyVeg(next);
+    try {
+      localStorage.setItem('foodfax_veg_mode_active', String(next));
+    } catch {}
+    window.dispatchEvent(new CustomEvent('foodfax:veg-mode-changed', { detail: { isVeg: next } }));
+  };
+
+  const handleVoiceSearch = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-IN';
+        recognition.start();
+        recognition.onresult = (event: any) => {
+          const transcript = event.results?.[0]?.[0]?.transcript;
+          if (transcript) {
+            setSearchQuery(transcript);
+            navigate(`/search?q=${encodeURIComponent(transcript)}`);
+          }
+        };
+      } catch {
+        navigate('/search');
+      }
+    } else {
+      navigate('/search');
+    }
+  };
+
   return (
-    <div className="pb-24 max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 pt-2.5 sm:pt-4 overflow-x-hidden">
+    <div className="pb-24 overflow-x-hidden">
       
-      {/* 1. ACTIVE LIVE ORDER TOKEN NOTIFICATION */}
-      {currentUser && activeOrder && (
-        <section 
-          id="active-order-banner"
-          aria-label="Active order token callout"
-          onClick={() => navigate(`/order/${activeOrder.id}`)}
-          className="cursor-pointer bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 rounded-2xl p-3.5 sm:p-4 text-white shadow-md shadow-orange-600/20 flex items-center justify-between gap-3 hover:brightness-105 transition-all"
-        >
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-xs flex flex-col items-center justify-center font-black leading-none text-white shrink-0 border border-white/20">
-              <span className="text-[8px] uppercase tracking-wider text-orange-200">Token</span>
-              <span className="text-sm sm:text-base mt-0.5">{activeOrder.tokenNumber}</span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-black uppercase tracking-wider bg-white/25 px-2 py-0.5 rounded-md shrink-0">
-                  {activeOrder.orderStatus}
-                </span>
-                <span className="text-xs sm:text-sm text-white font-bold truncate">
-                  {activeOrder.shopName}
-                </span>
+      {/* 1. ZOMATO-STYLE IMMERSIVE ANIMATED HERO CANVAS */}
+      <ImmersiveHeroStage
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        onVoiceSearch={handleVoiceSearch}
+        onlyVeg={onlyVeg}
+        onToggleVeg={handleToggleVeg}
+        onOpenQRScanner={onOpenQRScanner}
+      />
+
+      {/* Main Page Body Container */}
+      <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-6 sm:space-y-8 pt-4 sm:pt-6">
+        
+        {/* ACTIVE LIVE ORDER TOKEN NOTIFICATION */}
+        {currentUser && activeOrder && (
+          <section 
+            id="active-order-banner"
+            aria-label="Active order token callout"
+            onClick={() => navigate(`/order/${activeOrder.id}`)}
+            className="cursor-pointer bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 rounded-2xl p-3.5 sm:p-4 text-white shadow-md shadow-orange-600/20 flex items-center justify-between gap-3 hover:brightness-105 transition-all"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-xs flex flex-col items-center justify-center font-black leading-none text-white shrink-0 border border-white/20">
+                <span className="text-[8px] uppercase tracking-wider text-orange-200">Token</span>
+                <span className="text-sm sm:text-base mt-0.5">{activeOrder.tokenNumber}</span>
               </div>
-              <p className="text-[11px] sm:text-xs text-orange-100 mt-0.5 font-medium truncate">
-                {activeOrder.orderStatus === 'READY'
-                  ? 'Your counter order is READY! Tap to view collection code.'
-                  : 'Preparing now at the counter. Tap to track queue.'}
-              </p>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-white/80 shrink-0" />
-        </section>
-      )}
-
-      {/* 2. PROMINENT SEARCH BAR & VEG QUICK SWITCH */}
-      <section aria-label="Search and dietary preference" className="space-y-3">
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          <form 
-            onSubmit={handleSearchSubmit} 
-            className="flex-1 relative flex items-center bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:border-orange-400 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/20 transition-all p-2 sm:p-2.5"
-          >
-            <Search className="w-4.5 h-4.5 text-slate-400 shrink-0 ml-1.5 mr-2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search for food, shops or dishes..."
-              className="w-full text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600 mr-1"
-                aria-label="Clear search query"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-            <button
-              type="submit"
-              className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shrink-0 transition-colors hidden xs:flex items-center gap-1"
-            >
-              <span>Search</span>
-            </button>
-          </form>
-
-          {/* Pure Veg Toggle Switch (Matching food discovery platforms) */}
-          <button
-            type="button"
-            onClick={() => setOnlyVeg(!onlyVeg)}
-            aria-pressed={onlyVeg}
-            className={`flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-2xl border transition-all text-xs font-bold shrink-0 ${
-              onlyVeg 
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs' 
-                : 'bg-white border-slate-200/90 text-slate-600 hover:bg-slate-50'
-            }`}
-            title="Toggle Pure Veg Stalls"
-          >
-            <span className="w-2.5 h-2.5 rounded-sm border-2 border-emerald-600 flex items-center justify-center p-0.5 shrink-0">
-              <span className={`w-1 h-1 rounded-full bg-emerald-600 ${onlyVeg ? 'scale-125' : ''}`} />
-            </span>
-            <span className="hidden sm:inline">VEG</span>
-            <span className={`w-7 h-4 rounded-full transition-colors relative flex items-center px-0.5 ${onlyVeg ? 'bg-emerald-600' : 'bg-slate-300'}`}>
-              <span className={`w-3 h-3 rounded-full bg-white shadow-xs transition-transform transform ${onlyVeg ? 'translate-x-3' : 'translate-x-0'}`} />
-            </span>
-          </button>
-        </div>
-
-        {/* Location Subtext & Radar Map Shortcut Bar */}
-        <div className="flex items-center justify-between text-xs text-slate-500 px-1 flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-medium text-slate-400">Ordering near:</span>
-            <button
-              type="button"
-              onClick={() => setIsCityModalOpen(true)}
-              className="font-bold text-slate-800 hover:text-orange-600 flex items-center gap-1 truncate transition-colors underline decoration-slate-300 underline-offset-2"
-            >
-              <span className="truncate max-w-[220px] sm:max-w-none">{activeLocation.area || activeLocation.city}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Quick GPS auto-detect */}
-            <button
-              type="button"
-              onClick={handleDetectGPS}
-              disabled={gpsLoading}
-              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors flex items-center gap-1"
-            >
-              <Navigation className={`w-3 h-3 ${gpsLoading ? 'animate-spin' : ''}`} />
-              <span>{gpsLoading ? 'Detecting...' : 'Auto GPS'}</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. HERO / PROMOTIONAL CAROUSEL BANNER */}
-      <section aria-label="FoodFax feature highlights" className="relative">
-        <div className="relative overflow-hidden rounded-3xl shadow-sm border border-slate-200/80">
-          <div 
-            className="flex transition-transform duration-500 ease-out"
-            style={{ transform: `translateX(-${activeSlideIndex * 100}%)` }}
-          >
-            {HERO_SLIDES.map((slide) => (
-              <div
-                key={slide.id}
-                className={`w-full shrink-0 p-5 sm:p-7 md:p-9 bg-gradient-to-r ${slide.bgGradient} text-white relative flex flex-col justify-between min-h-[160px] sm:min-h-[190px]`}
-              >
-                {/* Background ambient pattern */}
-                <div 
-                  className="absolute inset-0 opacity-10 pointer-events-none"
-                  style={{
-                    backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                    backgroundSize: '20px 20px',
-                  }}
-                />
-
-                <div className="relative z-10 max-w-xl space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 backdrop-blur-xs px-2.5 py-0.5 rounded-full border border-white/25">
-                      {slide.badge}
-                    </span>
-                    <span className="text-[10px] font-bold text-orange-200 uppercase tracking-wider hidden sm:inline">
-                      {slide.tagline}
-                    </span>
-                  </div>
-
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight leading-tight">
-                    {slide.title} <span className="text-amber-300">{slide.highlightText}</span>
-                  </h2>
-
-                  <p className="text-xs sm:text-sm text-white/90 font-medium leading-relaxed max-w-md line-clamp-2 sm:line-clamp-none">
-                    {slide.description}
-                  </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-white/25 px-2 py-0.5 rounded-md shrink-0">
+                    {activeOrder.orderStatus}
+                  </span>
+                  <span className="text-xs sm:text-sm text-white font-bold truncate">
+                    {activeOrder.shopName}
+                  </span>
                 </div>
-
-                <div className="relative z-10 pt-3 sm:pt-4 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleSlideAction(slide.actionHandler)}
-                    className="px-4 py-2 sm:py-2.5 rounded-xl bg-white hover:bg-orange-50 active:scale-95 text-slate-900 font-extrabold text-xs sm:text-sm transition-all shadow-md flex items-center gap-1.5"
-                  >
-                    <span>{slide.actionText}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-orange-600" />
-                  </button>
-
-                  {/* Carousel navigation arrows on desktop */}
-                  <div className="hidden sm:flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setActiveSlideIndex((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)}
-                      className="p-1.5 rounded-full bg-black/20 hover:bg-black/35 text-white transition-colors"
-                      aria-label="Previous promotional slide"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveSlideIndex((prev) => (prev + 1) % HERO_SLIDES.length)}
-                      className="p-1.5 rounded-full bg-black/20 hover:bg-black/35 text-white transition-colors"
-                      aria-label="Next promotional slide"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <p className="text-[11px] sm:text-xs text-orange-100 mt-0.5 font-medium truncate">
+                  {activeOrder.orderStatus === 'READY'
+                    ? 'Your counter order is READY! Tap to view collection code.'
+                    : 'Preparing now at the counter. Tap to track queue.'}
+                </p>
               </div>
-            ))}
-          </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-white/80 shrink-0" />
+          </section>
+        )}
 
-          {/* Dots Indicator */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5">
-            {HERO_SLIDES.map((slide, idx) => (
-              <button
-                key={`dot-${slide.id}`}
-                onClick={() => setActiveSlideIndex(idx)}
-                aria-label={`Go to slide ${idx + 1}`}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  activeSlideIndex === idx ? 'w-6 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/80'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 4. FOOD CATEGORY DISCOVERY RAIL (With Circular Visual Food Dishes) */}
+        {/* 2. FOOD CATEGORY DISCOVERY RAIL (With Circular Visual Food Dishes) */}
       <section aria-label="Food category discovery" className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
               Explore by Food Category
             </h2>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -997,7 +870,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
             <button
               type="button"
               onClick={() => setSelectedCategory('all')}
-              className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 px-2.5 py-1 rounded-lg transition-colors"
+              className="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50/90 px-2.5 py-1 rounded-lg border border-orange-200/60 transition-colors"
             >
               Reset to All
             </button>
@@ -1024,10 +897,10 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
                   className="flex flex-col items-center gap-2 shrink-0 group/cat focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-2xl transition-transform active:scale-95 cursor-pointer"
                 >
                   {/* Circular Food Photo */}
-                  <div className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden transition-all duration-200 ${
+                  <div className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden transition-all duration-300 ${
                     isSelected 
-                      ? 'ring-3 ring-orange-600 ring-offset-2 ring-offset-white shadow-md' 
-                      : 'border border-slate-200/80 shadow-xs group-hover/cat:border-orange-300'
+                      ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-white shadow-card scale-105' 
+                      : 'border border-slate-200/80 shadow-subtle group-hover/cat:border-slate-300 group-hover/cat:shadow-card'
                   }`}>
                     <img
                       src={imageUrl}
@@ -1036,13 +909,13 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
                       loading="lazy"
                     />
                     {isSelected && (
-                      <div className="absolute inset-0 bg-orange-600/15 pointer-events-none" />
+                      <div className="absolute inset-0 bg-orange-600/10 pointer-events-none" />
                     )}
                   </div>
 
                   {/* Category Name */}
-                  <span className={`text-[11px] sm:text-xs font-bold text-center line-clamp-1 max-w-[80px] sm:max-w-[88px] transition-colors ${
-                    isSelected ? 'text-orange-600 font-black' : 'text-slate-700 group-hover/cat:text-slate-900'
+                  <span className={`text-[11px] sm:text-xs font-semibold text-center line-clamp-1 max-w-[80px] sm:max-w-[88px] transition-colors ${
+                    isSelected ? 'text-orange-600 font-bold' : 'text-slate-700 group-hover/cat:text-slate-900'
                   }`}>
                     {displayName}
                   </span>
@@ -1157,118 +1030,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
         </div>
       </section>
 
-      {/* 6. POPULAR NEAR YOU (Horizontal Discovery Rail) */}
-      {selectedCategory === 'all' && popularNearYou.length > 0 && (
-        <section aria-label="Popular near you" className="space-y-3 pt-1">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center">
-                <Flame className="w-4 h-4 fill-orange-600 text-orange-600" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-                  Popular Near You
-                </h2>
-                <p className="text-xs text-slate-500 font-medium">
-                  Highest rated food counters around {activeLocation.area || activeLocation.city}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/shops')}
-              className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-0.5 shrink-0"
-            >
-              <span>See All</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Horizontal scroll container with compact cards */}
-          <div 
-            ref={popularScrollRef}
-            className="flex items-stretch gap-3.5 sm:gap-4 overflow-x-auto no-scrollbar pb-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0"
-          >
-            {popularNearYou.map((shop) => (
-              <div 
-                key={`popular-${shop.id}`}
-                className="w-64 sm:w-72 shrink-0"
-              >
-                <ShopCard
-                  shop={shop}
-                  isSaved={savedShopIds.includes(shop.id)}
-                  onToggleSaved={handleToggleSaved}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* 7. CONTEXTUAL FOOD DISCOVERY SECTION A: Best Vada Pav & Snacks Near You */}
-      {selectedCategory === 'all' && vadaPavNearYou.length > 0 && (
-        <section aria-label="Best Vada Pav & Snacks" className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
-                <Store className="w-4 h-4 text-amber-700" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-                  Best Vada Pav & Snacks Near You
-                </h2>
-                <p className="text-xs text-slate-500 font-medium">
-                  Crispy batata vadas, spicy thecha & freshly fried savories
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-            {vadaPavNearYou.map((shop) => (
-              <ShopCard
-                key={`vada-${shop.id}`}
-                shop={shop}
-                isSaved={savedShopIds.includes(shop.id)}
-                onToggleSaved={handleToggleSaved}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* 8. CONTEXTUAL FOOD DISCOVERY SECTION B: Quick Bites Ready in ≤ 10 mins */}
-      {selectedCategory === 'all' && quickBitesNearYou.length > 0 && (
-        <section aria-label="Quick Bites" className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-emerald-700" />
-              </div>
-              <div>
-                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-                  Quick Bites Near You (≤ 10 mins prep)
-                </h2>
-                <p className="text-xs text-slate-500 font-medium">
-                  Fast counter pickup when you are on the go
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-            {quickBitesNearYou.map((shop) => (
-              <ShopCard
-                key={`quick-${shop.id}`}
-                shop={shop}
-                isSaved={savedShopIds.includes(shop.id)}
-                onToggleSaved={handleToggleSaved}
-              />
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* 9. PRIMARY DISCOVERY SECTION: NEARBY FOOD SPOTS */}
       <section id="nearby-food-spots-section" aria-label="Nearby food spots" className="space-y-4 pt-2">
@@ -1461,6 +1222,8 @@ export const HomeView: React.FC<HomeViewProps> = ({ onOpenQRScanner }) => {
           </div>
         </section>
       )}
+
+      </div>
 
       {/* 11. CITY / LOCATION SELECTOR MODAL */}
       {isCityModalOpen && (
