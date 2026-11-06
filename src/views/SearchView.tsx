@@ -44,7 +44,7 @@ export const SearchView: React.FC = () => {
 
         // Fetch menu items across stalls for dishes search
         const dishPromises = allShops.slice(0, 8).map(async (shop) => {
-          const items = await menuService.getMenuItems(shop.id);
+          const items = await menuService.getMenuItems(shop.id, shop.slug);
           return items.map((item) => ({ item, shop }));
         });
         const nestedDishes = await Promise.all(dishPromises);
@@ -87,9 +87,9 @@ export const SearchView: React.FC = () => {
     return menuItems.filter(({ item, shop }) => {
       const matchQuery =
         !normalizedQuery ||
-        item.name.toLowerCase().includes(normalizedQuery) ||
-        item.description.toLowerCase().includes(normalizedQuery) ||
-        shop.name.toLowerCase().includes(normalizedQuery);
+        (item.name && item.name.toLowerCase().includes(normalizedQuery)) ||
+        (item.description && item.description.toLowerCase().includes(normalizedQuery)) ||
+        (shop.name && shop.name.toLowerCase().includes(normalizedQuery));
 
       const matchCategory =
         selectedCategory === 'all' || item.categoryId === selectedCategory;

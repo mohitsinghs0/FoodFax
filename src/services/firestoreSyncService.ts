@@ -1081,7 +1081,14 @@ class SupabaseSyncService {
         ? localItems.filter((i) => isShopItemMatch(i.shopId))
         : localItems;
 
-      return filteredLocal;
+      if (filteredLocal.length > 0) return filteredLocal;
+
+      const mockFiltered = shopId
+        ? MOCK_MENU_ITEMS.filter((i) => isShopItemMatch(i.shopId))
+        : MOCK_MENU_ITEMS;
+      if (mockFiltered.length > 0) return mockFiltered;
+
+      return shopId ? generateDefaultShopMenu(shopId, slug) : [];
     }
 
     this.startSync();
@@ -1104,9 +1111,7 @@ class SupabaseSyncService {
       );
       const { data, error } = await Promise.race([baseQuery, timeoutPromise]);
 
-      if (!error && Array.isArray(data)) {
-        // Only strip items explicitly marked as demo in the raw DB row.
-        // Do NOT generate or inject any fake/default items — show only what the shop owner added.
+      if (!error && Array.isArray(data) && data.length > 0) {
         const allRemote = data
           .filter((row: any) => !row.is_demo)
           .map(normalizeMenuItemDoc);
@@ -1133,23 +1138,38 @@ class SupabaseSyncService {
           }
         } catch {}
 
-        // Return exactly what is in DB / owner added — empty array if shop owner has not added any items yet
-        return remoteList;
+        if (remoteList.length > 0) {
+          return remoteList;
+        }
       }
 
-      // Network timed out — fall back to local cache only (no fake items injected)
+      // If remote has no items or timed out/errored, fallback smoothly
       const filteredLocal = shopId
         ? localItems.filter((i) => isShopItemMatch(i.shopId))
         : localItems;
 
-      return filteredLocal;
+      if (filteredLocal.length > 0) return filteredLocal;
+
+      const mockFiltered = shopId
+        ? MOCK_MENU_ITEMS.filter((i) => isShopItemMatch(i.shopId))
+        : MOCK_MENU_ITEMS;
+      if (mockFiltered.length > 0) return mockFiltered;
+
+      return shopId ? generateDefaultShopMenu(shopId, slug) : [];
     } catch (err) {
       console.warn('[Supabase] Error fetching menu items, using clean local fallback:', err);
       const filteredLocal = shopId
         ? localItems.filter((i) => isShopItemMatch(i.shopId))
         : localItems;
 
-      return filteredLocal;
+      if (filteredLocal.length > 0) return filteredLocal;
+
+      const mockFiltered = shopId
+        ? MOCK_MENU_ITEMS.filter((i) => isShopItemMatch(i.shopId))
+        : MOCK_MENU_ITEMS;
+      if (mockFiltered.length > 0) return mockFiltered;
+
+      return shopId ? generateDefaultShopMenu(shopId, slug) : [];
     } finally {
       this.endSync();
     }

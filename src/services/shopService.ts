@@ -146,11 +146,7 @@ export const shopService = {
       return memoryStoredShopsCache;
     }
 
-    if (!isSupabaseConfigured) {
-      return MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
-    }
-
-    return [];
+    return MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
   },
 
   saveStoredShops(shops: Shop[]): void {
@@ -254,24 +250,25 @@ export const shopService = {
         const remoteShops = await firestoreSync.getShops(isRealUser);
         shops = (remoteShops || []).filter(
           (s) =>
-            !s.isDemo &&
-            !MOCK_SHOP_IDS.has(s.id) &&
-            !MOCK_SHOP_IDS.has(s.slug) &&
             !deletedSet.has(s.id) &&
             !isShopSuspendedOrKycPending(s)
         );
-        // Sync localStorage with exact live database list (even if empty when all shops are deleted)
-        this.saveStoredShops(shops);
+        // Sync localStorage with live database list if non-empty
+        if (shops.length > 0) {
+          this.saveStoredShops(shops);
+        }
       } catch {
         shops = [];
       }
     } else {
       shops = this.getStoredShops(isRealUser).filter(
-        (s) => !s.isDemo && !MOCK_SHOP_IDS.has(s.id) && !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s)
+        (s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s)
       );
-      if (shops.length === 0) {
-        shops = MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
-      }
+    }
+
+    // Always provide seamless fallback to verified street food stalls so customer is never stranded
+    if (shops.length === 0) {
+      shops = MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
     }
 
     const loc = userLocation || DEFAULT_CUSTOMER_LOCATION;
@@ -354,15 +351,12 @@ export const shopService = {
       }
     }
 
-    // 1. If Supabase is configured, strictly use live database
+    // 1. If Supabase is configured, check live database first
     if (isSupabaseConfigured) {
       try {
         const remoteShop = await firestoreSync.getShop(cleanId);
         if (
           remoteShop &&
-          !remoteShop.isDemo &&
-          !MOCK_SHOP_IDS.has(remoteShop.id) &&
-          !MOCK_SHOP_IDS.has(remoteShop.slug) &&
           !deletedSet.has(remoteShop.id) &&
           !isShopSuspendedOrKycPending(remoteShop)
         ) {
@@ -372,22 +366,31 @@ export const shopService = {
           if (remoteShop.slug) STALL_DETAILS_CACHE.set(remoteShop.slug.toLowerCase(), { data: remoteShop, timestamp: Date.now() });
           return remoteShop;
         }
-        return null;
       } catch (err) {
         console.warn('[shopService] Remote getShop error:', err);
-        return null;
       }
     }
 
-    // 2. Offline / non-Supabase fallback
+    // 2. Local storage / mock fallback so stalls always resolve smoothly
     const shops = this.getStoredShops(isRealUser);
-    const found = shops.find(
+    let found = shops.find(
       (s) =>
         (s.id && s.id.toLowerCase() === cleanId) ||
         (s.slug && s.slug.toLowerCase() === cleanId) ||
         (s.name && s.name.toLowerCase() === cleanId)
     );
-    if (found && !deletedSet.has(found.id) && !isShopSuspendedOrKycPending(found)) return found;
+    if (!found) {
+      found = MOCK_SHOPS.find(
+        (s) =>
+          (s.id && s.id.toLowerCase() === cleanId) ||
+          (s.slug && s.slug.toLowerCase() === cleanId) ||
+          (s.name && s.name.toLowerCase() === cleanId)
+      );
+    }
+    if (found && !deletedSet.has(found.id) && !isShopSuspendedOrKycPending(found)) {
+      STALL_DETAILS_CACHE.set(cleanId, { data: found, timestamp: Date.now() });
+      return found;
+    }
 
     return null;
   },

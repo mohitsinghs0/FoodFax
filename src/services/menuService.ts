@@ -1,6 +1,6 @@
 import { MenuItem, ShopCategory } from '../types';
 import { MOCK_MENU_ITEMS, MOCK_CATEGORIES } from '../data/mockData';
-import { firestoreSync, isFakeOrDefaultMenuItem } from './firestoreSyncService';
+import { firestoreSync, isFakeOrDefaultMenuItem, generateDefaultShopMenu } from './firestoreSyncService';
 import { isSupabaseConfigured } from '../supabase';
 
 const MENU_ITEMS_KEY = 'foodflow_menu_items';
@@ -28,16 +28,17 @@ export const menuService = {
       const stored = localStorage.getItem(MENU_ITEMS_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          return isSupabaseConfigured
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clean = isSupabaseConfigured
             ? parsed.filter((i) => !isFakeOrDefaultMenuItem(i))
             : parsed;
+          if (clean.length > 0) return clean;
         }
       }
     } catch {
       // fallback
     }
-    return [];
+    return MOCK_MENU_ITEMS;
   },
 
   saveStoredItems(items: MenuItem[]): void {
@@ -75,10 +76,24 @@ export const menuService = {
     const cacheKey = (shopId || shopSlug || '').toLowerCase().trim();
     if (cacheKey) {
       const cached = MENU_ITEMS_CACHE.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < MENU_CACHE_TTL_MS) {
+      if (cached && Date.now() - cached.timestamp < MENU_CACHE_TTL_MS && cached.data.length > 0) {
         return cached.data;
       }
     }
+
+    const lowerId = (shopId || '').toLowerCase().trim();
+    const lowerSlug = (shopSlug || '').toLowerCase().trim();
+    const idAlpha = lowerId.replace(/[^a-z0-9]/g, '');
+    const slugAlpha = lowerSlug.replace(/[^a-z0-9]/g, '');
+
+    const isMatch = (item: MenuItem): boolean => {
+      if (!item) return false;
+      const sid = (item.shopId || '').toLowerCase().trim();
+      const sidAlpha = sid.replace(/[^a-z0-9]/g, '');
+      if (lowerId && (sid === lowerId || (idAlpha && sidAlpha === idAlpha))) return true;
+      if (lowerSlug && (sid === lowerSlug || (slugAlpha && sidAlpha === slugAlpha))) return true;
+      return false;
+    };
 
     // 1. Fetch from Supabase / live sync
     try {
@@ -95,53 +110,39 @@ export const menuService = {
       console.warn('[menuService] Error fetching remote items:', err);
     }
 
-    // 2. Check local store for any items added for this shop
-    const items = this.getStoredItems();
-    const lowerId = (shopId || '').toLowerCase().trim();
-    const lowerSlug = (shopSlug || '').toLowerCase().trim();
-    const idAlpha = lowerId.replace(/[^a-z0-9]/g, '');
-    const slugAlpha = lowerSlug.replace(/[^a-z0-9]/g, '');
-
-    let localShops: any[] = [];
-    try {
-      const raw = localStorage.getItem('foodflow_shops') || localStorage.getItem('foodflow_shops_list');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) localShops = parsed;
+    // 2. Check local store (custom items created or updated locally)
+    const storedItems = this.getStoredItems();
+    const matchedStored = storedItems.filter(isMatch);
+    if (matchedStored.length > 0) {
+      if (cacheKey) {
+        MENU_ITEMS_CACHE.set(cacheKey, { data: matchedStored, timestamp: Date.now() });
       }
-    } catch {}
+      return matchedStored;
+    }
 
-    const foundShop = localShops.find(
-      (s: any) =>
-        (s.id && s.id.toLowerCase() === lowerId) ||
-        (s.slug && s.slug.toLowerCase() === lowerId) ||
-        (lowerSlug && s.id && s.id.toLowerCase() === lowerSlug) ||
-        (lowerSlug && s.slug && s.slug.toLowerCase() === lowerSlug)
-    );
-    const resolvedId = foundShop?.id ? foundShop.id.toLowerCase().trim() : lowerId;
-    const resolvedSlug = foundShop?.slug ? foundShop.slug.toLowerCase().trim() : lowerSlug;
-    const resolvedIdAlpha = resolvedId.replace(/[^a-z0-9]/g, '');
-    const resolvedSlugAlpha = resolvedSlug.replace(/[^a-z0-9]/g, '');
+    // 3. Fallback to rich mock catalog (Sharma Vada Pav, College Canteen, etc.)
+    const matchedMock = MOCK_MENU_ITEMS.filter(isMatch);
+    if (matchedMock.length > 0) {
+      if (cacheKey) {
+        MENU_ITEMS_CACHE.set(cacheKey, { data: matchedMock, timestamp: Date.now() });
+      }
+      return matchedMock;
+    }
 
-    const matched = items.filter((item) => {
-      const sid = (item.shopId || '').toLowerCase().trim();
-      const sidAlpha = sid.replace(/[^a-z0-9]/g, '');
-      if (sid === lowerId || (lowerSlug && sid === lowerSlug)) return true;
-      if (resolvedId && sid === resolvedId) return true;
-      if (resolvedSlug && sid === resolvedSlug) return true;
-      if (idAlpha && sidAlpha === idAlpha) return true;
-      if (slugAlpha && sidAlpha === slugAlpha) return true;
-      if (resolvedIdAlpha && sidAlpha === resolvedIdAlpha) return true;
-      if (resolvedSlugAlpha && sidAlpha === resolvedSlugAlpha) return true;
-      return false;
-    });
+    // 4. Default signature street food menu items for any stall so customer never gets empty screen
+    const defaultMenu = generateDefaultShopMenu(shopId, shopSlug);
+    if (defaultMenu.length > 0) {
+      if (cacheKey) {
+        MENU_ITEMS_CACHE.set(cacheKey, { data: defaultMenu, timestamp: Date.now() });
+      }
+      return defaultMenu;
+    }
 
-    // If local store has items that were added by the owner, return them
-    return matched;
+    return [];
   },
 
-  async getItems(shopId: string): Promise<MenuItem[]> {
-    return this.getShopMenu(shopId);
+  async getItems(shopId: string, shopSlug?: string): Promise<MenuItem[]> {
+    return this.getShopMenu(shopId, shopSlug);
   },
 
   async getMenuItem(itemId: string): Promise<MenuItem | null> {
