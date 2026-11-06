@@ -65,7 +65,7 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
 
     const loadShopData = async () => {
       let instantFound: Shop | null = null;
-      // 1. Instant optimistic check: check local stored shops or mock catalog for instant rendering (0ms)
+      // 1. Instant optimistic check: check local stored shops for instant rendering (0ms)
       try {
         const localShops = shopService.getStoredShops();
         const cleanTargetId = decodeURIComponent(String(shopId || '')).toLowerCase().trim();
@@ -79,36 +79,17 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
             (cleanAlpha && s.slug && s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha) ||
             (cleanAlpha && s.name && s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha)
         ) || null;
-        if (!instantFound) {
-          instantFound = MOCK_SHOPS.find(
-            (s) =>
-              (s.id && s.id.toLowerCase() === cleanTargetId) ||
-              (s.slug && s.slug.toLowerCase() === cleanTargetId) ||
-              (s.name && s.name.toLowerCase() === cleanTargetId) ||
-              (cleanAlpha && s.id && s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha) ||
-              (cleanAlpha && s.slug && s.slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha) ||
-              (cleanAlpha && s.name && s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlpha)
-          ) || null;
-        }
+
         if (instantFound && isMounted) {
           setShop(instantFound);
           setLoading(false);
           const shopIdLower = instantFound.id.toLowerCase();
           const shopSlugLower = (instantFound.slug || '').toLowerCase();
-          const sAlpha = shopIdLower.replace(/[^a-z0-9]/g, '');
-          const slugAlpha = shopSlugLower.replace(/[^a-z0-9]/g, '');
           const isItemMatch = (i: MenuItem) => {
             const sid = (i.shopId || '').toLowerCase().trim();
-            const sidAlpha = sid.replace(/[^a-z0-9]/g, '');
-            if (sid === shopIdLower || (shopSlugLower && sid === shopSlugLower)) return true;
-            if (sAlpha && sidAlpha === sAlpha) return true;
-            if (slugAlpha && sidAlpha === slugAlpha) return true;
-            return false;
+            return sid === shopIdLower || (shopSlugLower && sid === shopSlugLower);
           };
-          let cachedMenu = menuService.getStoredItems().filter(isItemMatch);
-          if (cachedMenu.length === 0) {
-            cachedMenu = MOCK_MENU_ITEMS.filter(isItemMatch);
-          }
+          const cachedMenu = menuService.getStoredItems().filter(isItemMatch);
           if (cachedMenu.length > 0) {
             setMenuItems(cachedMenu);
           }
@@ -123,21 +104,7 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
         if (!foundShop && instantFound) {
           foundShop = instantFound;
         }
-        if (!foundShop) {
-          const cleanTargetId = decodeURIComponent(String(shopId || '')).toLowerCase().trim();
-          foundShop = MOCK_SHOPS.find(
-            (s) =>
-              (s.id && s.id.toLowerCase() === cleanTargetId) ||
-              (s.slug && s.slug.toLowerCase() === cleanTargetId) ||
-              (s.name && s.name.toLowerCase() === cleanTargetId)
-          ) || null;
-        }
-        if (!foundShop) {
-          const nearby = await shopService.getNearbyShops();
-          if (nearby.length > 0) {
-            foundShop = nearby[0];
-          }
-        }
+
         if (foundShop && isMounted) {
           setShop(foundShop);
           try {
@@ -146,14 +113,7 @@ export const ShopDetailView: React.FC<ShopDetailViewProps> = ({ shopId }) => {
               shopService.getCategories(),
             ]);
             if (isMounted) {
-              if (items && items.length > 0) {
-                setMenuItems(items);
-              } else {
-                const fallbackItems = await menuService.getShopMenu(foundShop.id, foundShop.slug);
-                if (fallbackItems.length > 0) {
-                  setMenuItems(fallbackItems);
-                }
-              }
+              setMenuItems(items || []);
               setCategories(cats || []);
               setIsSaved(shopService.isShopSaved(foundShop.id));
             }

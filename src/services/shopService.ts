@@ -125,7 +125,6 @@ export const shopService = {
             !s.isDemo && 
             !MOCK_SHOP_IDS.has(s.id) && 
             s.id !== 'shop-411159' && 
-            s.slug !== 'deepak-chinese-corner' && 
             !deletedSet.has(s.id) && 
             !isShopSuspendedOrKycPending(s) && 
             !map.has(s.id)
@@ -144,6 +143,10 @@ export const shopService = {
 
     if (memoryStoredShopsCache && memoryStoredShopsCache.length > 0) {
       return memoryStoredShopsCache;
+    }
+
+    if (isSupabaseConfigured) {
+      return [];
     }
 
     return MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
@@ -266,8 +269,8 @@ export const shopService = {
       );
     }
 
-    // Always provide seamless fallback to verified street food stalls so customer is never stranded
-    if (shops.length === 0) {
+    // Only use mock catalog if Supabase is completely unconfigured / demo mode
+    if (!isSupabaseConfigured && shops.length === 0) {
       shops = MOCK_SHOPS.filter((s) => !deletedSet.has(s.id) && !isShopSuspendedOrKycPending(s));
     }
 
@@ -379,7 +382,7 @@ export const shopService = {
         (s.slug && s.slug.toLowerCase() === cleanId) ||
         (s.name && s.name.toLowerCase() === cleanId)
     );
-    if (!found) {
+    if (!found && !isSupabaseConfigured) {
       found = MOCK_SHOPS.find(
         (s) =>
           (s.id && s.id.toLowerCase() === cleanId) ||

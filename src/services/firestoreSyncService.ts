@@ -54,8 +54,6 @@ export const notifyDatabaseOrderCommitted = (order: Order): void => {
 };
 
 export const MOCK_SHOP_IDS = new Set<string>([
-  'deepak-chinese-corner',
-  'shop-411159',
   'sharma-vada-pav',
   'college-canteen',
   'mumbai-snacks-corner',
@@ -1076,103 +1074,78 @@ class SupabaseSyncService {
       return false;
     };
 
-    if (!isSupabaseConfigured) {
-      const filteredLocal = shopId
-        ? localItems.filter((i) => isShopItemMatch(i.shopId))
-        : localItems;
+    // If Supabase is configured, strictly query the live database for real menu items
+    if (isSupabaseConfigured) {
+      this.startSync();
+      try {
+        let query = supabase
+          .from('menu_items')
+          .select('*')
+          .order('display_order', { ascending: true });
 
-      if (filteredLocal.length > 0) return filteredLocal;
-
-      const mockFiltered = shopId
-        ? MOCK_MENU_ITEMS.filter((i) => isShopItemMatch(i.shopId))
-        : MOCK_MENU_ITEMS;
-      if (mockFiltered.length > 0) return mockFiltered;
-
-      return shopId ? generateDefaultShopMenu(shopId, slug) : [];
-    }
-
-    this.startSync();
-    try {
-      // Phase 3 SQL Optimization: Select only menu fields and filter by shop_id on server
-      let baseQuery = supabase
-        .from('menu_items')
-        .select('id, shop_id, name, description, price, image, is_veg, is_available, is_bestseller, preparation_time_min, category_id, is_demo, created_at, updated_at');
-
-      if (shopId) {
-        if (slug && slug !== shopId) {
-          baseQuery = baseQuery.or(`shop_id.eq.${shopId},shop_id.eq.${slug}`);
-        } else {
-          baseQuery = baseQuery.eq('shop_id', shopId);
-        }
-      }
-
-      const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
-        setTimeout(() => resolve({ data: null, error: new Error('Menu query timed out') }), 6000)
-      );
-      const { data, error } = await Promise.race([baseQuery, timeoutPromise]);
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        const allRemote = data
-          .filter((row: any) => !row.is_demo)
-          .map(normalizeMenuItemDoc);
-
-        // Merge DB items with any locally stored items that haven't synced yet
-        const unSyncedLocal = localItems.filter((loc) => {
-          return !allRemote.some((rem) => rem.id === loc.id);
-        });
-        if (unSyncedLocal.length > 0) {
-          // Attempt to push any un-synced items to DB in the background
-          unSyncedLocal.forEach((it) => this.createMenuItem(it).catch(() => {}));
+        if (shopId) {
+          query = query.eq('shop_id', shopId);
         }
 
-        const combinedItems = [...allRemote, ...unSyncedLocal];
+        const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('Menu query timed out') }), 6000)
+        );
+        let { data, error } = await Promise.race([query, timeoutPromise]);
 
-        const remoteList = shopId
-          ? combinedItems.filter((i) => isShopItemMatch(i.shopId))
-          : combinedItems;
-
-        // Update local cache with combined items (never wipe out un-synced items)
-        try {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('foodflow_menu_items', JSON.stringify(combinedItems));
+        // If no items found by shopId, try by slug if different
+        if ((!data || data.length === 0) && slug && slug !== shopId) {
+          const fallbackQuery = supabase
+            .from('menu_items')
+            .select('*')
+            .eq('shop_id', slug)
+            .order('display_order', { ascending: true });
+          const fallbackRes = await Promise.race([fallbackQuery, timeoutPromise]);
+          if (fallbackRes.data && fallbackRes.data.length > 0) {
+            data = fallbackRes.data;
+            error = null;
           }
-        } catch {}
+        }
 
-        if (remoteList.length > 0) {
-          return remoteList;
+        if (!error && Array.isArray(data)) {
+          const realItems = data
+            .filter((row: any) => row.is_active !== false)
+            .map(normalizeMenuItemDoc);
+
+          // Update local cache with real items from database
+          try {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('foodflow_menu_items', JSON.stringify(realItems));
+            }
+          } catch {}
+
+          return realItems;
+        }
+
+        if (error) {
+          console.warn('[Supabase] Error fetching menu_items:', error.message);
+        }
+      } catch (err) {
+        console.warn('[Supabase] Exception fetching menu_items:', err);
+      } finally {
+        this.endSync();
+      }
+    }
+
+    // Local storage fallback for items created locally (strictly no fake demo data)
+    try {
+      const stored = localStorage.getItem('foodflow_menu_items');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (shopId) {
+            return parsed.filter((i) => isShopItemMatch(i.shopId));
+          }
+          return parsed;
         }
       }
+    } catch {}
 
-      // If remote has no items or timed out/errored, fallback smoothly
-      const filteredLocal = shopId
-        ? localItems.filter((i) => isShopItemMatch(i.shopId))
-        : localItems;
-
-      if (filteredLocal.length > 0) return filteredLocal;
-
-      const mockFiltered = shopId
-        ? MOCK_MENU_ITEMS.filter((i) => isShopItemMatch(i.shopId))
-        : MOCK_MENU_ITEMS;
-      if (mockFiltered.length > 0) return mockFiltered;
-
-      return shopId ? generateDefaultShopMenu(shopId, slug) : [];
-    } catch (err) {
-      console.warn('[Supabase] Error fetching menu items, using clean local fallback:', err);
-      const filteredLocal = shopId
-        ? localItems.filter((i) => isShopItemMatch(i.shopId))
-        : localItems;
-
-      if (filteredLocal.length > 0) return filteredLocal;
-
-      const mockFiltered = shopId
-        ? MOCK_MENU_ITEMS.filter((i) => isShopItemMatch(i.shopId))
-        : MOCK_MENU_ITEMS;
-      if (mockFiltered.length > 0) return mockFiltered;
-
-      return shopId ? generateDefaultShopMenu(shopId, slug) : [];
-    } finally {
-      this.endSync();
-    }
+    return [];
   }
 
   public async getMenuItemsByShop(shopId: string, slug?: string): Promise<MenuItem[]> {

@@ -108,7 +108,7 @@ const AppContent: React.FC = () => {
       case 'shops':
         return <ShopsView />;
       case 'shop-detail':
-        return <ShopDetailView shopId={current.params.shopId || 'sharma-vada-pav'} />;
+        return <ShopDetailView shopId={current.params.shopId || ''} />;
       case 'cart':
         return <CartView />;
       case 'checkout':

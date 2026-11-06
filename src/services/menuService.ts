@@ -38,7 +38,10 @@ export const menuService = {
     } catch {
       // fallback
     }
-    return MOCK_MENU_ITEMS;
+    if (!isSupabaseConfigured) {
+      return MOCK_MENU_ITEMS;
+    }
+    return [];
   },
 
   saveStoredItems(items: MenuItem[]): void {
@@ -120,24 +123,20 @@ export const menuService = {
       return matchedStored;
     }
 
-    // 3. Fallback to rich mock catalog (Sharma Vada Pav, College Canteen, etc.)
-    const matchedMock = MOCK_MENU_ITEMS.filter(isMatch);
-    if (matchedMock.length > 0) {
-      if (cacheKey) {
-        MENU_ITEMS_CACHE.set(cacheKey, { data: matchedMock, timestamp: Date.now() });
+    if (!isSupabaseConfigured) {
+      const mockMatched = MOCK_MENU_ITEMS.filter(isMatch);
+      if (mockMatched.length > 0) {
+        if (cacheKey) {
+          MENU_ITEMS_CACHE.set(cacheKey, { data: mockMatched, timestamp: Date.now() });
+        }
+        return mockMatched;
       }
-      return matchedMock;
-    }
-
-    // 4. Default signature street food menu items for any stall so customer never gets empty screen
-    const defaultMenu = generateDefaultShopMenu(shopId, shopSlug);
-    if (defaultMenu.length > 0) {
+      const generated = generateDefaultShopMenu(shopId, shopSlug);
       if (cacheKey) {
-        MENU_ITEMS_CACHE.set(cacheKey, { data: defaultMenu, timestamp: Date.now() });
+        MENU_ITEMS_CACHE.set(cacheKey, { data: generated, timestamp: Date.now() });
       }
-      return defaultMenu;
+      return generated;
     }
-
     return [];
   },
 
@@ -262,6 +261,9 @@ export const menuService = {
 
   async getMenuItems(shopId?: string, shopSlug?: string): Promise<MenuItem[]> {
     if (!shopId) {
+      if (isSupabaseConfigured) {
+        return firestoreSync.getMenuItems();
+      }
       return this.getStoredItems();
     }
     return this.getShopMenu(shopId, shopSlug);
