@@ -94,7 +94,7 @@ export const ShopsView: React.FC = () => {
               <span className="truncate">All Food Stalls</span>
             </h1>
             <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
-              Discover local food stalls, canteens & snacks counters
+              Browse authentic local thelas, tapris, college canteens & food kiosks
             </p>
           </div>
         </div>
