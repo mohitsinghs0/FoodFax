@@ -28,7 +28,7 @@ export const CartView: React.FC = () => {
         </div>
         <h2 className="text-xl font-black text-slate-900 mb-1">Your cart is empty</h2>
         <p className="text-xs text-slate-500 mb-6 max-w-xs mx-auto">
-          Explore delicious local street food counters, tapris, and college canteens nearby.
+          Discover fresh food and snacks from stalls near you.
         </p>
         <button
           onClick={() => navigate('/shops')}

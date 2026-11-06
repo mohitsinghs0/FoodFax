@@ -22,12 +22,34 @@ function getSupabaseServer() {
   });
 }
 
-function sendJson(res: ServerResponse, statusCode: number, data: any) {
+const ALLOWED_ORIGINS = [
+  'https://foodfax.in',
+  'https://www.foodfax.in',
+  'https://owner.foodfax.in',
+  'https://roxs.store',
+  'https://www.roxs.store',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+
+function getCorsOrigin(req: IncomingMessage): string {
+  const origin = (req.headers.origin as string) || '';
+  if (ALLOWED_ORIGINS.includes(origin)) return origin;
+  if (/^https:\/\/(foodfax|roxs)[a-z0-9-]*\.vercel\.app$/.test(origin)) return origin;
+  return 'https://www.foodfax.in';
+}
+
+function sendJson(res: ServerResponse, statusCode: number, data: any, req?: IncomingMessage) {
+  const origin = req ? getCorsOrigin(req) : 'https://www.foodfax.in';
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Upiqrpay-Signature',
+    'Access-Control-Allow-Credentials': 'true',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
   });
   res.end(JSON.stringify(data));
 }
@@ -36,11 +58,13 @@ export default async function handler(
   req: IncomingMessage & { query?: Record<string, any> },
   res: ServerResponse
 ) {
+  const origin = getCorsOrigin(req);
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Upiqrpay-Signature',
+      'Access-Control-Allow-Credentials': 'true',
     });
     res.end();
     return;
@@ -159,24 +183,40 @@ export default async function handler(
         const orderId = upiData.data.order_id || paymentRecord?.order_id;
         if (orderId) {
           try {
-            await supabase
-              .from('payments')
-              .update({
-                payment_status: 'PAID',
-                transaction_id: verifiedUtr,
-                paid_at: upiData.data.paid_at || new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .eq('order_id', orderId);
-
-            await supabase
+            // SECURITY: Verify paid amount matches order total before updating to PAID
+            const { data: orderToVerify } = await supabase
               .from('orders')
-              .update({
-                payment_status: 'PAID',
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', orderId);
-          } catch {}
+              .select('id, total, payment_status')
+              .eq('id', orderId)
+              .maybeSingle();
+
+            const verifiedPaidAmount = Number(upiData.data.amount || 0);
+            const expectedTotal = Number(orderToVerify?.total || 0);
+
+            if (orderToVerify && verifiedPaidAmount > 0 && verifiedPaidAmount < expectedTotal) {
+              console.error(`[Payment Security] Underpayment rejected during status check for ${orderId}: received ₹${verifiedPaidAmount}, expected ₹${expectedTotal}`);
+            } else {
+              await supabase
+                .from('payments')
+                .update({
+                  payment_status: 'PAID',
+                  transaction_id: verifiedUtr,
+                  paid_at: upiData.data.paid_at || new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('order_id', orderId);
+
+              await supabase
+                .from('orders')
+                .update({
+                  payment_status: 'PAID',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', orderId);
+            }
+          } catch (err) {
+            console.warn('[PaymentAPI] Error updating order status to PAID:', err);
+          }
         }
       }
 

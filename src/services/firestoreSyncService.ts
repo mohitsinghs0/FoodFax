@@ -1518,6 +1518,12 @@ class SupabaseSyncService {
         updates.cancelled_at = now;
         updates.cancellation_reason = details?.cancellationReason || 'Cancelled';
         updates.cancelled_by = details?.cancelledBy || changedBy || 'system';
+        if ((details as any)?.refund_status) {
+          updates.refund_status = (details as any).refund_status;
+          updates.refund_amount = (details as any).refund_amount || 0;
+          updates.refund_reason = details?.cancellationReason || 'Cancelled';
+          updates.refund_requested_at = now;
+        }
       }
 
       await supabase.from('orders').update(updates).eq('id', orderId);

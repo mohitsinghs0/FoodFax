@@ -11,6 +11,24 @@ const PLATFORM_UPIQRPAY_API_KEY =
   'e8b41962-f509-4f57-9663-33ffd33e47a1';
 const UPIQRPAY_BASE_URL = 'https://upiqrpay.in/api/v1';
 
+const ALLOWED_ORIGINS = [
+  'https://foodfax.in',
+  'https://www.foodfax.in',
+  'https://owner.foodfax.in',
+  'https://roxs.store',
+  'https://www.roxs.store',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+
+function getCorsOrigin(req: IncomingMessage): string {
+  const origin = (req.headers.origin as string) || '';
+  if (ALLOWED_ORIGINS.includes(origin)) return origin;
+  if (/^https:\/\/(foodfax|roxs)[a-z0-9-]*\.vercel\.app$/.test(origin)) return origin;
+  return 'https://www.foodfax.in';
+}
+
 function getSupabaseServer() {
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -48,22 +66,28 @@ function readBody(req: IncomingMessage & { body?: any }): Promise<any> {
   });
 }
 
-function sendJson(res: ServerResponse, statusCode: number, data: any) {
+function sendJson(res: ServerResponse, statusCode: number, data: any, req?: IncomingMessage) {
+  const origin = req ? getCorsOrigin(req) : 'https://www.foodfax.in';
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Upiqrpay-Signature',
+    'Access-Control-Allow-Credentials': 'true',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
   });
   res.end(JSON.stringify(data));
 }
 
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
+  const origin = getCorsOrigin(req);
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Upiqrpay-Signature',
+      'Access-Control-Allow-Credentials': 'true',
     });
     res.end();
     return;
@@ -71,38 +95,48 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
 
   try {
     const body = await readBody(req);
-    const { order_id, customer_phone, customer_name, redirect_url, amount, shop_id } = body || {};
+    const { order_id, customer_phone, customer_name, redirect_url } = body || {};
 
     if (!order_id) {
-      sendJson(res, 400, { success: false, message: 'Missing order_id' });
+      sendJson(res, 400, { success: false, message: 'Missing order_id' }, req);
       return;
     }
 
-    let orderAmount = Number(amount || 0);
-    let orderShopId = shop_id || null;
-    let order: any = null;
+    // SECURITY HARDENING: Never trust client-supplied amount!
+    // Always look up the real, server-side verified order from Supabase
+    const supabase = getSupabaseServer();
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('id, shop_id, customer_name, customer_phone, total, payment_status, order_status')
+      .eq('id', order_id)
+      .maybeSingle();
 
-    if (!orderAmount || orderAmount <= 0) {
-      try {
-        const supabase = getSupabaseServer();
-        const { data } = await supabase.from('orders').select('*').eq('id', order_id).maybeSingle();
-        if (data) {
-          order = data;
-          orderAmount = Number(data.total || 0);
-          if (!orderShopId) orderShopId = data.shop_id;
-        }
-      } catch {}
-    }
-
-    if (!orderAmount || orderAmount <= 0) {
-      sendJson(res, 400, { success: false, message: `Invalid order amount for ${order_id}.` });
+    if (orderErr || !order) {
+      sendJson(res, 404, { success: false, message: `Order ${order_id} not found.` }, req);
       return;
     }
 
+    if (order.payment_status === 'PAID') {
+      sendJson(res, 400, { success: false, message: `Order ${order_id} is already paid.` }, req);
+      return;
+    }
+
+    if (order.order_status === 'CANCELLED') {
+      sendJson(res, 400, { success: false, message: `Order ${order_id} has been cancelled.` }, req);
+      return;
+    }
+
+    const orderAmount = Number(order.total || 0);
+    if (!orderAmount || orderAmount <= 0) {
+      sendJson(res, 400, { success: false, message: `Invalid verified order amount for ${order_id}.` }, req);
+      return;
+    }
+
+    const orderShopId = order.shop_id;
     let shopApiKey = PLATFORM_UPIQRPAY_API_KEY;
+
     if (orderShopId) {
       try {
-        const supabase = getSupabaseServer();
         const timeoutPromise = new Promise<{ data: null }>((resolve) =>
           setTimeout(() => resolve({ data: null }), 1000)
         );
@@ -119,20 +153,20 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
       } catch {}
     }
 
-    const host = req.headers.host || 'localhost:3000';
+    const host = req.headers.host || 'foodfax.in';
     const protocol = req.headers['x-forwarded-proto'] || 'https';
-    const origin = `${protocol}://${host}`;
-    const phone = String(customer_phone || order?.customer_phone || '9876543210')
+    const reqOrigin = `${protocol}://${host}`;
+    const phone = String(customer_phone || order.customer_phone || '9876543210')
       .replace(/\D/g, '')
       .slice(-10) || '9876543210';
 
     const upiPayload = {
       amount: Math.round(orderAmount),
       order_id: String(order_id),
-      customer_name: customer_name || order?.customer_name || 'FoodFax Customer',
+      customer_name: customer_name || order.customer_name || 'FoodFax Customer',
       customer_phone: phone,
-      redirect_url: redirect_url || `${origin}/#/order/${order_id}`,
-      webhook_url: `${origin}/api/payment/webhook`,
+      redirect_url: redirect_url || `${reqOrigin}/#/order/${order_id}`,
+      webhook_url: `${reqOrigin}/api/payment/webhook`,
     };
 
     const upiResponse = await fetch(`${UPIQRPAY_BASE_URL}/order/create`, {
@@ -151,7 +185,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         success: false,
         code: upiData.code || 'UPI_GATEWAY_ERROR',
         message: upiData.message || 'UPIQRPay gateway could not create order.',
-      });
+      }, req);
       return;
     }
 
@@ -161,7 +195,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
       success: true,
       data: {
         payment_id: qrResult.payment_id,
-        amount: orderAmount, // Strict pricing integrity: never override with arbitrary paise
+        amount: orderAmount, // Server-verified amount
         order_id: qrResult.order_id || order_id,
         qr_code: qrResult.qr_code,
         upi_link: qrResult.upi_link,
@@ -169,11 +203,11 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         expires_at: qrResult.expires_at,
         status: qrResult.status || 'pending',
       },
-    });
+    }, req);
   } catch (err: any) {
     sendJson(res, 500, {
       success: false,
       message: err?.message || 'Internal payment gateway error',
-    });
+    }, req);
   }
 }

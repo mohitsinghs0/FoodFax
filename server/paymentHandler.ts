@@ -100,31 +100,45 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
         return true;
       }
 
-      // Fast amount resolution: If client provided amount, use directly to avoid unnecessary DB latency
-      let orderAmount = Number(amount || 0);
-      let orderShopId = shop_id || null;
+      // SECURITY HARDENING: Never trust client-supplied amount!
+      // Always look up the real, server-side verified order from Supabase database
       let order: any = null;
+      let orderAmount = 0;
+      let orderShopId = shop_id || null;
 
-      if (!orderAmount || orderAmount <= 0) {
-        try {
-          const { data } = await getSupabaseServer()
-            .from('orders')
-            .select('*')
-            .eq('id', order_id)
-            .maybeSingle();
+      try {
+        const { data: dbOrder, error: dbErr } = await getSupabaseServer()
+          .from('orders')
+          .select('id, shop_id, customer_name, customer_phone, total, payment_status, order_status')
+          .eq('id', order_id)
+          .maybeSingle();
 
-          if (data) {
-            order = data;
-            orderAmount = Number(data.total || 0);
-            if (!orderShopId) orderShopId = data.shop_id;
-          }
-        } catch (e) {
-          console.warn('[PaymentAPI] Supabase query error:', e);
+        if (dbErr || !dbOrder) {
+          sendJson(res, 404, { success: false, message: `Order ${order_id} not found.` });
+          return true;
         }
+
+        if (dbOrder.payment_status === 'PAID') {
+          sendJson(res, 400, { success: false, message: `Order ${order_id} is already paid.` });
+          return true;
+        }
+
+        if (dbOrder.order_status === 'CANCELLED') {
+          sendJson(res, 400, { success: false, message: `Order ${order_id} has been cancelled.` });
+          return true;
+        }
+
+        order = dbOrder;
+        orderAmount = Number(dbOrder.total || 0);
+        orderShopId = dbOrder.shop_id || orderShopId;
+      } catch (e: any) {
+        console.error('[PaymentAPI] Supabase order query error:', e);
+        sendJson(res, 500, { success: false, message: 'Database error validating order' });
+        return true;
       }
 
       if (!orderAmount || orderAmount <= 0) {
-        sendJson(res, 400, { success: false, message: `Invalid or missing order amount for ${order_id}.` });
+        sendJson(res, 400, { success: false, message: `Invalid verified order amount for ${order_id}.` });
         return true;
       }
 
@@ -255,16 +269,28 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
       }
 
       // Fetch order to verify shop's webhook secret
-      const { data: order } = await getSupabaseServer()
+      const { data: order, error: orderErr } = await getSupabaseServer()
         .from('orders')
         .select('*, shops(upiqrpay_webhook_secret)')
         .eq('id', order_id)
         .maybeSingle();
 
+      if (orderErr || !order) {
+        console.error(`[UPIQRPay Webhook] Order ${order_id} not found.`);
+        sendJson(res, 404, { success: false, message: `Order ${order_id} not found` });
+        return true;
+      }
+
       const webhookSecret = order?.shops?.upiqrpay_webhook_secret || PLATFORM_WEBHOOK_SECRET;
 
-      // Verify HMAC-SHA256 signature if secret is configured
-      if (webhookSecret && signature) {
+      // STRICT HMAC-SHA256 signature verification
+      if (webhookSecret) {
+        if (!signature) {
+          console.error('[UPIQRPay Webhook] Missing X-Upiqrpay-Signature header.');
+          sendJson(res, 401, { success: false, message: 'Missing webhook signature' });
+          return true;
+        }
+
         const expectedSignature = crypto
           .createHmac('sha256', webhookSecret)
           .update(rawBody)
@@ -277,10 +303,16 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
         }
       }
 
-      // Verify amount matches order total if order exists
-      if (order && Math.abs(Number(order.total) - Number(amount)) > 1) {
-        console.error(`[UPIQRPay Webhook] Amount mismatch! Order: ₹${order.total}, Paid: ₹${amount}`);
-        sendJson(res, 400, { success: false, message: 'Amount mismatch' });
+      // Verify amount matches order total if order exists (reject underpayments)
+      const paidAmount = Number(amount || 0);
+      const expectedAmount = Number(order.total || 0);
+
+      if (paidAmount > 0 && paidAmount < expectedAmount) {
+        console.error(`[UPIQRPay Webhook] Underpayment rejected! Order: ₹${expectedAmount}, Paid: ₹${paidAmount}`);
+        sendJson(res, 400, {
+          success: false,
+          message: `Underpayment rejected: received ₹${paidAmount}, expected ₹${expectedAmount}`,
+        });
         return true;
       }
 
@@ -399,19 +431,35 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
           const orderId = upiData.data.order_id || paymentRecord?.order_id;
           if (orderId) {
             try {
-              await getSupabaseServer().from('payments').update({
-                payment_status: 'PAID',
-                utr_number: verifiedUtr,
-                transaction_id: verifiedUtr,
-                paid_at: upiData.data.paid_at || new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              }).eq('provider_payment_id', paymentId);
+              // SECURITY: Verify paid amount matches order total before updating to PAID
+              const { data: orderToVerify } = await getSupabaseServer()
+                .from('orders')
+                .select('id, total, payment_status')
+                .eq('id', orderId)
+                .maybeSingle();
 
-              await getSupabaseServer().from('orders').update({
-                payment_status: 'PAID',
-                updated_at: new Date().toISOString(),
-              }).eq('id', orderId);
-            } catch {}
+              const verifiedPaidAmount = Number(upiData.data.amount || 0);
+              const expectedTotal = Number(orderToVerify?.total || 0);
+
+              if (orderToVerify && verifiedPaidAmount > 0 && verifiedPaidAmount < expectedTotal) {
+                console.error(`[Payment Security] Underpayment rejected during status check for ${orderId}: received ₹${verifiedPaidAmount}, expected ₹${expectedTotal}`);
+              } else {
+                await getSupabaseServer().from('payments').update({
+                  payment_status: 'PAID',
+                  utr_number: verifiedUtr,
+                  transaction_id: verifiedUtr,
+                  paid_at: upiData.data.paid_at || new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }).eq('provider_payment_id', paymentId);
+
+                await getSupabaseServer().from('orders').update({
+                  payment_status: 'PAID',
+                  updated_at: new Date().toISOString(),
+                }).eq('id', orderId);
+              }
+            } catch (err) {
+              console.warn('[PaymentAPI] Error updating order status to PAID:', err);
+            }
           }
         }
 
@@ -527,6 +575,217 @@ export async function handlePaymentRequest(req: IncomingMessage, res: ServerResp
       return true;
     } catch (err: any) {
       sendJson(res, 500, { success: false, message: err?.message });
+      return true;
+    }
+  }
+
+  // 5. Cancel Order & Request Refund: POST /api/order/cancel
+  if (url.startsWith('/api/order/cancel') && method === 'POST') {
+    try {
+      const rawBody = await readBody(req);
+      const { orderId, reason, cancelledBy = 'customer', customerId, customerPhone, shopId } = JSON.parse(rawBody || '{}');
+
+      if (!orderId || typeof orderId !== 'string') {
+        sendJson(res, 400, { success: false, error: 'orderId string is required.' });
+        return true;
+      }
+
+      const cleanOrderId = orderId.trim();
+      const cleanReason = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 200) : 'Cancelled by customer';
+      const cleanCancelledBy = cancelledBy === 'owner' || cancelledBy === 'admin' ? cancelledBy : 'customer';
+
+      const supabase = getSupabaseServer();
+
+      // Fetch order
+      const { data: order, error: fetchErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', cleanOrderId)
+        .maybeSingle();
+
+      if (fetchErr || !order) {
+        sendJson(res, 404, { success: false, error: `Order ${cleanOrderId} not found.` });
+        return true;
+      }
+
+      // IDOR Access Control: Verify caller authorization
+      if (cleanCancelledBy === 'customer') {
+        const orderPhone = typeof order.customer_phone === 'string' ? order.customer_phone.replace(/\D/g, '').slice(-10) : '';
+        const orderCustId = typeof order.customer_id === 'string' ? order.customer_id.trim() : '';
+        const hasCustomerBinding = Boolean(orderPhone || orderCustId);
+
+        if (hasCustomerBinding) {
+          const callerPhone = typeof customerPhone === 'string' ? customerPhone.replace(/\D/g, '').slice(-10) : '';
+          const callerCustId = typeof customerId === 'string' ? customerId.trim() : '';
+
+          const phoneMatch = Boolean(callerPhone && orderPhone && callerPhone === orderPhone);
+          const idMatch = Boolean(callerCustId && orderCustId && callerCustId === orderCustId);
+
+          let tokenAuthorized = false;
+          const authHeader = req.headers.authorization;
+          if (authHeader && authHeader.startsWith('Bearer ')) {
+            try {
+              const token = authHeader.split(' ')[1];
+              const { data: { user } } = await supabase.auth.getUser(token);
+              if (user) {
+                const uPhone = user.phone ? user.phone.replace(/\D/g, '').slice(-10) : '';
+                if (user.id === orderCustId || (uPhone && uPhone === orderPhone)) {
+                  tokenAuthorized = true;
+                }
+              }
+            } catch {}
+          }
+
+          if (!phoneMatch && !idMatch && !tokenAuthorized) {
+            if (callerPhone || callerCustId || authHeader) {
+              sendJson(res, 403, {
+                success: false,
+                error: 'Forbidden: You are not authorized to cancel an order belonging to another customer.',
+              });
+              return true;
+            }
+          }
+        }
+      } else if (cleanCancelledBy === 'owner') {
+        const callerShopId = typeof shopId === 'string' ? shopId.trim() : '';
+        if (callerShopId && order.shop_id && callerShopId !== order.shop_id) {
+          sendJson(res, 403, {
+            success: false,
+            error: 'Forbidden: Merchant cannot cancel an order belonging to another food stall.',
+          });
+          return true;
+        }
+      }
+
+      const currentStatus = String(order.order_status || '').toUpperCase();
+      const isPaid =
+        order.payment_method === 'PAY_ONLINE' ||
+        String(order.payment_status || '').toUpperCase() === 'PAID';
+      const totalAmount = Math.max(0, Number(order.total || 0));
+
+      // 1. Idempotency Check: if already cancelled, return existing status
+      if (currentStatus === 'CANCELLED') {
+        const { data: existingRef } = await supabase
+          .from('refunds')
+          .select('*')
+          .eq('order_id', cleanOrderId)
+          .maybeSingle();
+
+        sendJson(res, 200, {
+          success: true,
+          orderId: cleanOrderId,
+          orderStatus: 'CANCELLED',
+          isPaid,
+          refundStatus: existingRef?.status || order.refund_status || (isPaid ? 'REQUESTED' : 'NONE'),
+          refundAmount: existingRef?.amount || totalAmount,
+          refundId: existingRef?.id || null,
+          message: 'Order is already cancelled.',
+          alreadyCancelled: true,
+        });
+        return true;
+      }
+
+      // 2. Terminal State Protection: Completed orders cannot be cancelled
+      if (currentStatus === 'COMPLETED') {
+        sendJson(res, 400, {
+          success: false,
+          error: 'Order has already been completed and collected. Cancellations are strictly locked.',
+        });
+        return true;
+      }
+
+      // 3. Pre-kitchen Policy Check
+      if (cleanCancelledBy === 'customer') {
+        if (currentStatus !== 'PENDING') {
+          sendJson(res, 400, {
+            success: false,
+            error: `Order has already been accepted by the kitchen (Status: ${currentStatus}). Cancellations are strictly locked once cooking begins.`,
+          });
+          return true;
+        }
+      }
+
+      const now = new Date().toISOString();
+      const refundAmount = isPaid ? totalAmount : 0;
+      const refundStatus = isPaid && refundAmount > 0 ? 'REQUESTED' : 'NONE';
+
+      // Update order in database
+      const { error: updateErr } = await supabase
+        .from('orders')
+        .update({
+          order_status: 'CANCELLED',
+          cancellation_reason: cleanReason,
+          cancelled_at: now,
+          cancelled_by: cleanCancelledBy,
+          updated_at: now,
+          refund_status: refundStatus,
+          refund_amount: refundAmount,
+          refund_reason: isPaid ? cleanReason : null,
+          refund_requested_at: isPaid ? now : null,
+        })
+        .eq('id', cleanOrderId);
+
+      if (updateErr) {
+        sendJson(res, 500, { success: false, error: 'Database update failed.' });
+        return true;
+      }
+
+      // Record in public.refunds table with duplicate check
+      let refundId: string | null = null;
+      if (isPaid && refundAmount > 0) {
+        const { data: existingRef } = await supabase
+          .from('refunds')
+          .select('id')
+          .eq('order_id', cleanOrderId)
+          .maybeSingle();
+
+        if (existingRef?.id) {
+          refundId = existingRef.id;
+        } else {
+          const { data: refRow } = await supabase
+            .from('refunds')
+            .insert({
+              order_id: cleanOrderId,
+              customer_id: order.customer_id || null,
+              customer_phone: order.customer_phone || null,
+              shop_id: order.shop_id,
+              amount: refundAmount,
+              refund_type: 'FULL',
+              status: 'REQUESTED',
+              reason: cleanReason,
+              created_at: now,
+              updated_at: now,
+            })
+            .select('id')
+            .maybeSingle();
+
+          if (refRow?.id) refundId = refRow.id;
+        }
+
+        await supabase
+          .from('payments')
+          .update({
+            payment_status: 'REFUND_PENDING',
+            updated_at: now,
+          })
+          .eq('order_id', cleanOrderId);
+      }
+
+      sendJson(res, 200, {
+        success: true,
+        orderId: cleanOrderId,
+        orderStatus: 'CANCELLED',
+        isPaid,
+        refundStatus,
+        refundAmount,
+        refundId,
+        message: isPaid
+          ? `Order cancelled. 100% full refund of ₹${refundAmount} requested to original payment method.`
+          : 'Order cancelled successfully.',
+      });
+      return true;
+    } catch (err: any) {
+      sendJson(res, 500, { success: false, error: err?.message || 'Server error.' });
       return true;
     }
   }

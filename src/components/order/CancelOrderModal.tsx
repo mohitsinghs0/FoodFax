@@ -92,7 +92,7 @@ export const CancelOrderModal: React.FC<CancelOrderModalProps> = ({
             <span>Eligible for 100% Full Refund</span>
           </p>
           <p className="text-[11px] text-emerald-800 leading-relaxed">
-            The stall owner has not accepted this order yet (Status: <strong>PENDING</strong>). Cancelling now automatically claims a full 100% refund of <strong>₹{order.total}</strong> to your account and frees your token slot.
+            The stall owner has not accepted this order yet (Status: <strong>PENDING</strong>). Cancelling now automatically claims a full 100% refund of <strong>₹{order.total}</strong> to your original payment method.
           </p>
         </div>
 

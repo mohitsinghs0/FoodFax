@@ -38,9 +38,8 @@ function readRawBody(req: IncomingMessage & { body?: any }): Promise<string> {
 function sendJson(res: ServerResponse, statusCode: number, data: any) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Upiqrpay-Signature',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
   });
   res.end(JSON.stringify(data));
 }
@@ -49,10 +48,15 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Upiqrpay-Signature',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Upiqrpay-Signature',
     });
     res.end();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { success: false, message: 'Method not allowed' });
     return;
   }
 
@@ -62,22 +66,31 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
       req.headers['http_x_upiqrpay_signature'] ||
       '') as string;
     const payload: any = JSON.parse(rawBody || '{}');
-    const { payment_id, order_id, status, utr_number, paid_at } = payload;
+    const { payment_id, order_id, status, utr_number, paid_at, amount } = payload;
 
     if (!order_id || !payment_id) {
-      sendJson(res, 400, { success: false, message: 'Invalid webhook payload' });
+      sendJson(res, 400, { success: false, message: 'Invalid webhook payload: missing order_id or payment_id' });
       return;
     }
 
     const supabase = getSupabaseServer();
-    const { data: order } = await supabase
+    const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('*, shops(upiqrpay_webhook_secret)')
+      .select('id, total, payment_status, shop_id, shops(upiqrpay_webhook_secret)')
       .eq('id', order_id)
       .maybeSingle();
 
-    const webhookSecret = order?.shops?.upiqrpay_webhook_secret || PLATFORM_WEBHOOK_SECRET;
-    if (webhookSecret && signature) {
+    if (orderErr || !order) {
+      sendJson(res, 404, { success: false, message: `Order ${order_id} not found` });
+      return;
+    }
+
+    const webhookSecret = (order as any)?.shops?.upiqrpay_webhook_secret || PLATFORM_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      if (!signature) {
+        sendJson(res, 401, { success: false, message: 'Missing X-Upiqrpay-Signature header' });
+        return;
+      }
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
         .update(rawBody)
@@ -90,6 +103,18 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     }
 
     if (status === 'success' || payload.event === 'payment.success') {
+      // FINANCIAL VERIFICATION: Paid amount must match or exceed order total
+      const paidAmount = Number(amount || 0);
+      const expectedAmount = Number(order.total || 0);
+
+      if (paidAmount > 0 && paidAmount < expectedAmount) {
+        sendJson(res, 400, {
+          success: false,
+          message: `Underpayment rejected: received ₹${paidAmount}, expected ₹${expectedAmount}`,
+        });
+        return;
+      }
+
       const now = paid_at || new Date().toISOString();
       const verifiedUtr = utr_number || payment_id;
 
@@ -98,7 +123,6 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         .from('orders')
         .update({
           payment_status: 'PAID',
-          utr_number: verifiedUtr,
           updated_at: new Date().toISOString(),
         })
         .eq('id', order_id);
@@ -110,7 +134,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
           order_id,
           payment_mode: 'PAY_ONLINE',
           payment_status: 'PAID',
-          amount: Number(order?.total || payload.amount || 0),
+          amount: expectedAmount,
           transaction_id: verifiedUtr,
           provider: 'upiqrpay',
           paid_at: now,
@@ -123,6 +147,6 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
 
     sendJson(res, 200, { success: true, message: 'Webhook processed successfully' });
   } catch (err: any) {
-    sendJson(res, 500, { success: false, message: err?.message || 'Webhook error' });
+    sendJson(res, 500, { success: false, message: err?.message || 'Webhook processing error' });
   }
 }

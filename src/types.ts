@@ -160,6 +160,9 @@ export interface Order {
   refundStatus?: string;
   refundAmount?: number;
   refundReason?: string;
+  refundUtr?: string;
+  refundRequestedAt?: string;
+  refundCompletedAt?: string;
   rating?: number;
   reviewText?: string;
   reviewedAt?: string;

@@ -509,6 +509,106 @@ export const LiveOrderTracker: React.FC<LiveOrderTrackerProps> = ({ orderId }) =
         </section>
       )}
 
+      {/* 1.01 LIVE REFUND STATUS STEPPER (For Online Paid Cancelled Orders) */}
+      {isCancelled && (order.paymentMethod === 'PAY_ONLINE' || order.paymentStatus === 'PAID' || Boolean(order.refundStatus)) && (
+        <section
+          role="status"
+          aria-label="Refund Tracking Stepper"
+          className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-4"
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <Receipt className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">Refund to Recent Payment Method</h4>
+                <p className="text-[11px] text-slate-500">Original UPI / Bank Source</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-sm font-black text-emerald-700">₹{order.refundAmount || order.total}</span>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                {order.refundStatus === 'COMPLETED' ? 'Credited' : 'In Progress'}
+              </span>
+            </div>
+          </div>
+
+          {/* Stepper Steps */}
+          <div className="space-y-3.5 relative before:absolute before:left-3.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+            {/* Step 1: Cancellation & Full Refund Approved */}
+            <div className="flex items-start gap-3 relative">
+              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 z-10 shadow-xs">
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-xs font-bold text-slate-900">Order Cancellation Confirmed</p>
+                <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                  100% full refund approved per FoodFax Stall Policy.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 2: Processing by Platform */}
+            <div className="flex items-start gap-3 relative">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10 shadow-xs ${
+                order.refundStatus === 'COMPLETED' 
+                  ? 'bg-emerald-500 text-white' 
+                  : 'bg-amber-500 text-white animate-pulse'
+              }`}>
+                {order.refundStatus === 'COMPLETED' ? (
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-xs font-bold text-slate-900">
+                  {order.refundStatus === 'COMPLETED' ? 'Refund Processed' : 'Processing with Payment Gateway'}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                  {order.refundStatus === 'COMPLETED'
+                    ? 'Payment reversal has been executed from FoodFax platform.'
+                    : 'Dispatched to customer original UPI VPA / bank account.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3: Bank Credit with UTR */}
+            <div className="flex items-start gap-3 relative">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10 shadow-xs ${
+                order.refundStatus === 'COMPLETED'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-100 text-slate-400 border border-slate-300'
+              }`}>
+                {order.refundStatus === 'COMPLETED' ? (
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-xs font-bold text-slate-900">
+                  {order.refundStatus === 'COMPLETED' ? 'Amount Credited to Account' : 'Expected in 1-2 Business Days'}
+                </p>
+                {order.refundUtr ? (
+                  <div className="mt-1 p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 font-mono text-[11px] font-bold flex items-center justify-between">
+                    <span>Bank UTR: {order.refundUtr}</span>
+                    <span className="text-[10px] bg-emerald-200/80 text-emerald-900 px-1.5 py-0.5 rounded-md uppercase font-sans">
+                      Verified
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                    Funds will reflect directly in your original UPI app statement.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 1.05 PENDING UPI UTR VERIFICATION BANNER */}
       {!isCancelled && order.paymentMethod === 'PAY_ONLINE' && order.paymentStatus !== 'PAID' && (
         <section

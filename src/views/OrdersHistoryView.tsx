@@ -21,7 +21,8 @@ import {
   Filter,
   Star,
   XCircle,
-  Ban
+  Ban,
+  RotateCcw
 } from 'lucide-react';
 import { OrderRatingReview } from '../components/order/OrderRatingReview';
 import { SpendingTrendsChart } from '../components/order/SpendingTrendsChart';
@@ -265,6 +266,22 @@ export const OrdersHistoryView: React.FC = () => {
                           <Ban className="w-3 h-3 text-red-500 flex-shrink-0" />
                           <span className="truncate">Cancelled: {order.cancellationReason}</span>
                         </p>
+                      )}
+                      {order.orderStatus === 'CANCELLED' && (order.paymentMethod === 'PAY_ONLINE' || order.paymentStatus === 'PAID' || Boolean(order.refundStatus)) && (
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            order.refundStatus === 'COMPLETED'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>
+                              {order.refundStatus === 'COMPLETED'
+                                ? `₹${order.refundAmount || order.total} Refunded${order.refundUtr ? ` (UTR: ${order.refundUtr})` : ''}`
+                                : `₹${order.refundAmount || order.total} Refund Processing`}
+                            </span>
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>

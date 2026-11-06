@@ -8,7 +8,7 @@ function upiqrpayApiPlugin(): Plugin {
     name: 'upiqrpay-api-plugin',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (req.url && req.url.startsWith('/api/payment')) {
+        if (req.url && (req.url.startsWith('/api/payment') || req.url.startsWith('/api/order'))) {
           const chunks: Buffer[] = [];
           req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
           req.on('end', async () => {
@@ -32,7 +32,7 @@ function upiqrpayApiPlugin(): Plugin {
     },
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
-        if (req.url && req.url.startsWith('/api/payment')) {
+        if (req.url && (req.url.startsWith('/api/payment') || req.url.startsWith('/api/order'))) {
           const chunks: Buffer[] = [];
           req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
           req.on('end', async () => {

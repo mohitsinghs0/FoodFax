@@ -11,4 +11,13 @@ coverage/
 *.cert
 *.pfx
 .vercel
+recovery-codes.txt
+*recovery*.txt
+*.bak
+*.hm
+cb_ds*
+drive_*
+metadata.json
+bun.lock
+node-compile-cache/
 

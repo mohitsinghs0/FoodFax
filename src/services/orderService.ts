@@ -476,7 +476,7 @@ export const orderService = {
           cancelledAt: now,
           cancelledBy,
           ...(isPaidOnline && {
-            refund_status: 'INITIATED',
+            refund_status: 'REQUESTED',
             refund_amount: existingOrder.total,
           }),
         },
@@ -485,6 +485,26 @@ export const orderService = {
       );
     } catch (err) {
       console.warn('[orderService] Failed to sync order cancellation to database:', err);
+    }
+
+    // Server-side cancellation & refund request
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      try {
+        fetch('/api/order/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId,
+            reason,
+            cancelledBy,
+            customerId: existingOrder.customerId,
+            customerPhone: existingOrder.customerPhone,
+            shopId: existingOrder.shopId,
+          }),
+        }).catch((err) => {
+          console.warn('[orderService] /api/order/cancel background warning:', err);
+        });
+      } catch {}
     }
 
     // Trigger real-time notification for the specific shop owner

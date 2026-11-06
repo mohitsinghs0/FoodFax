@@ -30,7 +30,8 @@ function saveLocalUserToRegistry(user: AuthUser, password?: string, business?: O
     const filtered = registry.filter(
       (u) => u.user.id !== user.id && u.user.email?.toLowerCase() !== user.email?.toLowerCase() && u.user.phone !== user.phone
     );
-    filtered.push({ user, password, business });
+    // SECURITY: Never persist plaintext passwords in browser localStorage
+    filtered.push({ user, business });
     localStorage.setItem(LOCAL_USERS_REGISTRY_KEY, JSON.stringify(filtered));
   } catch {
     // ignore
@@ -801,16 +802,17 @@ class AuthService {
         throw new Error('Incorrect password! Please enter the correct password for your account.');
       }
 
-      // Sync verified password across tables if one was missing
+      // SECURITY HARDENING: Never write plaintext passwords into public database tables!
+      // If legacy hash is missing, sync only the cryptographic hash
       if (isSupabaseConfigured) {
-        if (dbUser && dbUser.password !== password) {
+        if (dbUser && !dbUser.password_hash) {
           try {
-            await supabase.from('users').update({ password, updated_at: new Date().toISOString() }).eq('id', dbUser.id);
+            await supabase.from('users').update({ password_hash: hashedInput, updated_at: new Date().toISOString() }).eq('id', dbUser.id);
           } catch {}
         }
-        if (dbCustomer && dbCustomer.password !== password) {
+        if (dbCustomer && !dbCustomer.password_hash) {
           try {
-            await supabase.from('customers').update({ password, updated_at: new Date().toISOString() }).eq('id', dbCustomer.id);
+            await supabase.from('customers').update({ password_hash: hashedInput, updated_at: new Date().toISOString() }).eq('id', dbCustomer.id);
           } catch {}
         }
       }
@@ -894,7 +896,6 @@ class AuthService {
               phone: userProfile.phone,
               email: targetEmail,
               role: userProfile.role,
-              password,
               is_active: true,
               profile_completed: false,
             });
@@ -903,6 +904,18 @@ class AuthService {
 
         this.persistSession(userProfile, business);
         return { user: userProfile, business: business || undefined };
+      }
+
+      // Check if user account actually exists to distinguish wrong password from non-existent account
+      if (authError && isSupabaseConfigured) {
+        try {
+          const { data: existsResult } = await supabase.rpc('check_user_exists', { p_identifier: rawInput });
+          if (existsResult && existsResult.exists) {
+            throw new Error('Incorrect password! Please enter the correct password for your account.');
+          }
+        } catch (rpcErr: any) {
+          if (rpcErr.message && rpcErr.message.includes('Incorrect password')) throw rpcErr;
+        }
       }
     }
 
@@ -1050,10 +1063,11 @@ class AuthService {
     };
 
     // 2. Direct storage in dedicated `public.customers` table
+    const hashedPwd = await hashPassword(password);
     const customerRecord = {
       id: uid,
       phone: formattedPhone,
-      password: password,
+      password_hash: hashedPwd,
       email: data.email?.trim() ? data.email.trim().toLowerCase() : null,
       full_name: fullName,
       photo_url: data.photoUrl || null,
@@ -1081,7 +1095,7 @@ class AuthService {
       phone: formattedPhone,
       email: emailToUse,
       role: 'customer',
-      password: password,
+      password_hash: hashedPwd,
       photo_url: data.photoUrl || null,
       profile_completed: false,
       is_active: true,
@@ -1093,7 +1107,7 @@ class AuthService {
       try {
         const { error: insertErr } = await supabase.from('users').upsert(customerPayload);
         if (insertErr && (insertErr.message?.includes('password') || insertErr.code === '42703')) {
-          const { password: _, ...fallbackPayload } = customerPayload;
+          const { password_hash: _, ...fallbackPayload } = customerPayload;
           await supabase.from('users').upsert(fallbackPayload);
         }
       } catch (err) {
@@ -1236,14 +1250,15 @@ class AuthService {
       createdAt: new Date().toISOString(),
     };
 
-    // 2. Insert into public.users table (including password if column exists in table)
+    // 2. Insert into public.users table (using password_hash, never plaintext password)
+    const ownerHashedPwd = await hashPassword(password);
     const ownerPayload = {
       id: uid,
       full_name: fullName,
       phone: newOwner.phone,
       email: email,
       role: 'owner',
-      password: password,
+      password_hash: ownerHashedPwd,
       profile_completed: false,
       is_active: true,
       created_at: newOwner.createdAt,
@@ -1253,7 +1268,7 @@ class AuthService {
     try {
       const { error: insertErr } = await supabase.from('users').upsert(ownerPayload);
       if (insertErr && (insertErr.message?.includes('password') || insertErr.code === '42703')) {
-        const { password: _, ...fallbackPayload } = ownerPayload;
+        const { password_hash: _, ...fallbackPayload } = ownerPayload;
         await supabase.from('users').upsert(fallbackPayload);
       }
     } catch (err) {

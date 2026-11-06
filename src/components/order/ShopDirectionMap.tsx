@@ -209,13 +209,24 @@ export const ShopDirectionMap: React.FC<ShopDirectionMapProps> = ({
 
         // Shop marker (orange pin)
         const shopPin = document.createElement('div');
-        shopPin.innerHTML = `
-          <div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:default">
-            <div style="width:36px;height:36px;border-radius:50% 50% 50% 0;background:linear-gradient(135deg,#f97316,#ea580c);border:2.5px solid white;box-shadow:0 4px 12px rgba(249,115,22,0.5);display:flex;align-items:center;justify-content:center;transform:rotate(-45deg)">
-              <span style="transform:rotate(45deg);font-size:16px">🏪</span>
-            </div>
-            <div style="margin-top:4px;background:rgba(249,115,22,0.95);color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${shopName}</div>
-          </div>`;
+        const container = document.createElement('div');
+        container.style.cssText = 'position:relative;display:flex;flex-direction:column;align-items:center;cursor:default';
+
+        const iconBox = document.createElement('div');
+        iconBox.style.cssText = 'width:36px;height:36px;border-radius:50% 50% 50% 0;background:linear-gradient(135deg,#f97316,#ea580c);border:2.5px solid white;box-shadow:0 4px 12px rgba(249,115,22,0.5);display:flex;align-items:center;justify-content:center;transform:rotate(-45deg)';
+        const iconSpan = document.createElement('span');
+        iconSpan.style.cssText = 'transform:rotate(45deg);font-size:16px';
+        iconSpan.textContent = '🏪';
+        iconBox.appendChild(iconSpan);
+
+        const nameLabel = document.createElement('div');
+        nameLabel.style.cssText = 'margin-top:4px;background:rgba(249,115,22,0.95);color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+        // Safe against XSS: strictly set plain text content
+        nameLabel.textContent = shopName || 'Shop';
+
+        container.appendChild(iconBox);
+        container.appendChild(nameLabel);
+        shopPin.appendChild(container);
         shopMarkerRef.current = new AdvancedMarkerElement({
           map,
           position: { lat: shopLatitude, lng: shopLongitude },
