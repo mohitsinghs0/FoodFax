@@ -18,18 +18,19 @@ const supabaseAnonKey = (
 
 /**
  * Asserts that the provided key or current client environment does not contain
- * a Supabase Service Role Key. Throws an explicit error to prevent accidental
- * privilege escalation or secret leakage into client bundles.
+ * a Supabase Service Role Key. Prevents accidental privilege escalation or secret leakage.
+ * Returns true if clean, or false if a service_role key was detected and neutralized.
  */
-export function assertNoServiceRoleKey(key?: string): void {
-  const checkKey = (candidate: string) => {
-    if (!candidate || typeof candidate !== 'string') return;
+export function assertNoServiceRoleKey(key?: string): boolean {
+  const checkKey = (candidate: string): boolean => {
+    if (!candidate || typeof candidate !== 'string') return true;
     const lower = candidate.toLowerCase();
     if (lower.includes('service_role') || lower.includes('servicerole')) {
-      throw new Error(
-        'CRITICAL SECURITY VIOLATION: Supabase service_role key detected in frontend client. ' +
-        'Frontend bundles must strictly only use the public anon key.'
+      console.error(
+        '[FoodFax Security] ⚠️ CRITICAL SECURITY WARNING: Supabase service_role key detected in frontend client. ' +
+        'Frontend bundles must strictly only use the public anon key. The key has been neutralized.'
       );
+      return false;
     }
     // Inspect JWT payload if key is structured as a 3-part token
     const parts = candidate.split('.');
@@ -43,59 +44,80 @@ export function assertNoServiceRoleKey(key?: string): void {
         if (decoded) {
           const payload = JSON.parse(decoded);
           if (payload?.role === 'service_role') {
-            throw new Error(
-              'CRITICAL SECURITY VIOLATION: JWT with role "service_role" detected in frontend client. ' +
-              'Service role tokens must NEVER be exposed in client code.'
+            console.error(
+              '[FoodFax Security] ⚠️ CRITICAL SECURITY WARNING: JWT with role "service_role" detected in frontend client. ' +
+              'Service role tokens must NEVER be exposed in client code. The key has been neutralized.'
             );
+            return false;
           }
         }
-      } catch (err: any) {
-        if (err?.message?.includes('CRITICAL SECURITY VIOLATION')) {
-          throw err;
-        }
+      } catch {
+        // Ignored non-JWT format
       }
     }
+    return true;
   };
 
-  if (key) {
-    checkKey(key);
+  let isClean = true;
+  if (key && !checkKey(key)) {
+    isClean = false;
   }
-  if (supabaseAnonKey) {
-    checkKey(supabaseAnonKey);
+  if (supabaseAnonKey && !checkKey(supabaseAnonKey)) {
+    isClean = false;
   }
   if (env?.VITE_SUPABASE_SERVICE_ROLE_KEY || env?.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error(
-      'CRITICAL SECURITY VIOLATION: VITE_SUPABASE_SERVICE_ROLE_KEY is present in client environment variables. ' +
-      'Remove this secret immediately from your frontend .env files.'
+    console.error(
+      '[FoodFax Security] ⚠️ CRITICAL: VITE_SUPABASE_SERVICE_ROLE_KEY is present in client environment variables. ' +
+      'Remove this secret immediately from your frontend .env files and hosting provider.'
     );
+    isClean = false;
   }
+
+  return isClean;
 }
 
-// Immediately enforce hygiene at module evaluation time
-assertNoServiceRoleKey(supabaseAnonKey);
+// Enforce security hygiene without throwing uncaught fatal module errors
+const isKeySafe = assertNoServiceRoleKey(supabaseAnonKey);
+const sanitizedAnonKey = isKeySafe ? supabaseAnonKey : '';
+
+// Detect if app is deployed remotely but still pointing to local Mac Mini docker IP
+const isLocalhostHost = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '0.0.0.0');
+const isLocalhostBackend = Boolean(supabaseUrl && (supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost')));
+const isBackendReachable = !isLocalhostBackend || isLocalhostHost || typeof window === 'undefined';
 
 export const isSupabaseConfigured = Boolean(
+  isKeySafe &&
+  isBackendReachable &&
   supabaseUrl &&
   supabaseUrl.startsWith('http') &&
   !supabaseUrl.includes('your-project') &&
   !supabaseUrl.includes('mock-foodfax') &&
-  supabaseAnonKey &&
-  supabaseAnonKey !== 'your-anon-or-publishable-key' &&
-  supabaseAnonKey !== 'mock-anon-key-placeholder'
+  sanitizedAnonKey &&
+  sanitizedAnonKey !== 'your-anon-or-publishable-key' &&
+  sanitizedAnonKey !== 'mock-anon-key-placeholder'
 );
 
 if (!isSupabaseConfigured) {
-  console.info(
-    '[Supabase] ℹ️ Running in demo / mock data mode.\n' +
-    'To connect to the local Supabase stack, set VITE_SUPABASE_URL=http://127.0.0.1:8000 and VITE_SUPABASE_ANON_KEY in .env'
-  );
+  if (isLocalhostBackend && !isLocalhostHost && typeof window !== 'undefined') {
+    console.warn(
+      `[Supabase] ⚠️ Localhost URL (${supabaseUrl}) detected on remote deployment (${window.location.hostname}).\n` +
+      `Browsers block HTTP localhost calls from remote HTTPS. Running safely in demo/mock mode.\n` +
+      `To connect to live data, set production VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your hosting dashboard.`
+    );
+  } else {
+    console.info(
+      '[Supabase] ℹ️ Running in demo / mock data mode.\n' +
+      'To connect to the local Supabase stack, set VITE_SUPABASE_URL=http://127.0.0.1:8000 and VITE_SUPABASE_ANON_KEY in .env'
+    );
+  }
 } else {
   console.info('[Supabase] ✅ Configured → ', supabaseUrl);
 }
 
 // Fallback URL is only used when Supabase is not configured — real traffic always goes to activeUrl
 const activeUrl = isSupabaseConfigured ? supabaseUrl : 'http://127.0.0.1:8000';
-const activeAnonKey = isSupabaseConfigured ? supabaseAnonKey : 'mock-anon-key-placeholder';
+const activeAnonKey = isSupabaseConfigured ? sanitizedAnonKey : 'mock-anon-key-placeholder';
 
 // For local self-hosted Supabase, derive the WebSocket endpoint from the HTTP URL.
 // Supabase-js v2 automatically appends /realtime/v1 to the base URL, so no override needed.

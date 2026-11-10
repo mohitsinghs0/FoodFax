@@ -35,43 +35,55 @@ export interface SessionCookiePayload {
  * Standard Browser Cookie Helpers
  */
 export function setCookie(name: string, value: string, days: number = DEFAULT_SESSION_DAYS): void {
-  if (typeof document === 'undefined') return;
+  try {
+    if (typeof document === 'undefined') return;
 
-  const date = new Date();
-  date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+    const date = new Date();
+    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
 
-  const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  const encodedValue = encodeURIComponent(value);
+    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const encodedValue = encodeURIComponent(value);
 
-  document.cookie = `${name}=${encodedValue};expires=${date.toUTCString()};path=/;SameSite=Lax${isSecure ? ';Secure' : ''}`;
+    document.cookie = `${name}=${encodedValue};expires=${date.toUTCString()};path=/;SameSite=Lax${isSecure ? ';Secure' : ''}`;
+  } catch {
+    // Ignore cookie write restrictions in privacy-hardened browsers
+  }
 }
 
 export function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
+  try {
+    if (typeof document === 'undefined' || typeof document.cookie !== 'string') return null;
 
-  const nameEQ = `${name}=`;
-  const ca = document.cookie.split(';');
+    const nameEQ = `${name}=`;
+    const ca = document.cookie.split(';');
 
-  for (let i = 0; i < ca.length; i++) {
-    let c = ca[i];
-    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-    if (c.indexOf(nameEQ) === 0) {
-      try {
-        return decodeURIComponent(c.substring(nameEQ.length, c.length));
-      } catch {
-        return c.substring(nameEQ.length, c.length);
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+      if (c.indexOf(nameEQ) === 0) {
+        try {
+          return decodeURIComponent(c.substring(nameEQ.length, c.length));
+        } catch {
+          return c.substring(nameEQ.length, c.length);
+        }
       }
     }
-  }
 
-  return null;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function deleteCookie(name: string): void {
-  if (typeof document === 'undefined') return;
+  try {
+    if (typeof document === 'undefined') return;
 
-  const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax;Max-Age=0${isSecure ? ';Secure' : ''}`;
+    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax;Max-Age=0${isSecure ? ';Secure' : ''}`;
+  } catch {
+    // Ignore cookie delete restrictions
+  }
 }
 
 /**
